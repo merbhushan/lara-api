@@ -83,4 +83,37 @@ class accessManagerController extends Controller
 
         return ($objAccessLevel);
     }
+
+    /**
+     *	Returns an array of fields which can be accessiable by a user.
+     * 	@param 	int 	DataTypeId
+     * 	@param 	array 	User's FieldLeve access
+     * 	@return array
+     */
+    public function getAccessiableRows($intDataType, $arrFieldLevelAccess){
+        // dd($arrFieldLevelAccess);
+        return DB::table('data_rows')
+            ->leftJoin('data_groups', function($join){
+                $join->on('data_rows.data_group_id', '=', 'data_groups.id')
+                    ->on('data_groups.is_active', '=', DB::raw(1));
+            })
+            ->leftJoin('data_row_user_level', function($join){
+                $join->on('data_rows.id', '=', 'data_row_user_level.data_row_id')
+                    ->on('data_row_user_level.is_deleted', '=', DB::raw(0));
+            })
+            ->select('data_rows.id')
+            ->where('data_groups.data_type_id', $intDataType)
+            ->where(function($query)use($arrFieldLevelAccess){
+                return $query->whereNull('data_row_user_level.data_row_id')
+                    ->orWhere(function($query)use($arrFieldLevelAccess){
+                        return $query->where('is_strict', 0)
+                            ->where('data_row_user_level.row_level_user_id', '<=', max($arrFieldLevelAccess));
+                    })
+                    ->orWhere(function($query)use($arrFieldLevelAccess){
+                        return $query->where('data_row_user_level.is_strict', 1)
+                            ->whereIn('data_row_user_level.row_level_user_id', $arrFieldLevelAccess);
+                    });
+            })
+            ->get()->pluck('id')->toArray();
+    }
 }
