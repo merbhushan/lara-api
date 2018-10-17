@@ -10,4 +10,9 @@ class DataRow extends Model
     public function scopeSkipHidden($query){
     	return $query->where('element_type_id', '<>', 0);
     }
+
+    // browse scope added
+    public function scopeIsBrowsable($query){
+    	return $query->where('browse', 1);
+    }
 }
