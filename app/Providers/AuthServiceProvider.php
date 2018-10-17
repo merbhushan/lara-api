@@ -28,5 +28,12 @@ class AuthServiceProvider extends ServiceProvider
 
         //Laravel Passport Routes
         Passport::routes();
+
+        // Define scope of passport tokens.
+        Passport::tokensCan(Scope::select('name', 'display_name')
+            ->where('is_active',1)
+            ->get()
+            ->pluck('display_name', 'name')
+            ->toArray());
     }
 }
