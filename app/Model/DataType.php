@@ -15,4 +15,9 @@ class DataType extends Model
     public function dataGroup(){
     	return $this->hasMany('App\Model\DataGroup');
     }
+
+    // Relationship with BreadTable
+    public function breadTable(){
+    	return $this->belongsTo('App\Model\BreadTable');
+    }
 }
