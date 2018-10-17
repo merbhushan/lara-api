@@ -10,4 +10,9 @@ class DataType extends Model
     public function apiAction(){
     	return $this->belongsToMany('App\Model\ApiAction', 'data_type_api_action');
     }
+
+    // Relationship with dataGroup
+    public function dataGroup(){
+    	return $this->hasMany('App\Model\DataGroup');
+    }
 }
