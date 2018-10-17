@@ -15,14 +15,12 @@ class InitialiseSession
      */
     public function handle($request, Closure $next)
     {
-        $objUser = $request->user();
+        
 
         session([
-            'user' => $objUser,
-            'user_id' => $objUser->id,
             'scope' => explode('.', $request->route()->getName())[0]
         ]);
-        
+
         return $next($request);
     }
 }

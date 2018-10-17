@@ -15,6 +15,18 @@ class ValidateUserAccess
      */
     public function handle($request, Closure $next)
     {
+        $objUser = $request->user();
+
+        // Validate User Status.
+        if(empty($objUser->is_active)){
+            return redirect('api/error/INACTIVE_USER');
+        }
+
+        session([
+            'user' => $objUser,
+            'user_id' => $objUser->id
+        ]);
+
         return $next($request);
     }
 }

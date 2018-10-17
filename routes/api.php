@@ -15,6 +15,6 @@ use Illuminate\Http\Request;
 Route::get('error/{error}', 'exceptoinController@index');
 
 // InitialiseSession middleware is being added to store global information into a session of a user once token is being validate by passport
-Route::middleware('auth:api', 'InitialiseSession')->get('/user', function (Request $request) {
+Route::middleware(['auth:api', 'ValidateUserAccess', 'InitialiseSession'])->get('/user', function (Request $request) {
     return $request->user();
 });
