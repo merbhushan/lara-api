@@ -47,4 +47,40 @@ class accessManagerController extends Controller
             ->get()
             ->toArray();
     }
+
+    /**
+     * Returns an array of user's access at data & row level.
+     * @param 	int 	ScopeId
+     * @return 	array 	
+     */
+    protected function getUserAccessLevel($intScopeId){
+        // $objAccessLevel = Session::select('data')->where('module_id', 1)->user(session('user_id', null))->where('ref_id', $intScopeId)->first();
+
+        // if(empty($objAccessLevel)){
+            $objRoleBasedAccess = DB::table('user_role')
+                ->leftJoin('scope_role', 'scope_role.role_id', '=', 'user_role.role_id')
+                ->select('scope_role.data_type_user_level_id', 'scope_role.data_row_user_level_id')
+                ->where('user_role.user_id', $this->intUserId)
+                ->where('scope_role.scope_id', $intScopeId);
+
+            $objAccessLevel = DB::table('scope_user')
+                ->select('scope_user.data_type_user_level_id', 'scope_user.data_row_user_level_id')
+                ->where('scope_user.user_id', $this->intUserId)
+                ->where('scope_user.scope_id', $intScopeId)
+                ->union($objRoleBasedAccess)
+                ->get();
+
+            // Session::insert([
+            //     'module_id'=>'1',
+            //     'user_id' => session('user_id', 0),
+            //     'ref_id'=>$intScopeId,
+            //     'data'=> json_encode($objAccessLevel)
+            // ]);
+        // }
+        // else{
+        //     $objAccessLevel = json_decode($objAccessLevel->data);
+        // }
+
+        return ($objAccessLevel);
+    }
 }
