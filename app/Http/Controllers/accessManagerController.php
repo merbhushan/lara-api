@@ -33,6 +33,36 @@ class accessManagerController extends Controller
     }
 
     /**
+     *	to updates users's access detail. 
+     */
+    public function updateUsersAccess(){
+    	if(empty($this->strScope) || is_null($this->strScope)){
+    		$this->strScope = session('scope', null);
+    	}
+
+    	if(empty($this->intUserId) || is_null($this->intUserId)){
+    		$this->intUserId = session('user_id', null);
+    	}
+
+    	if(!empty($this->strScope) && !empty($this->intUserId)){
+	    	// Seting a scope
+	    	$this->scope = Scope::name($this->strScope)->with('dataType')->active()->first();
+
+	    	// Set DataType linked with a scope.
+	        $this->dataType = $this->scope->dataType;
+
+	        // Set a breadTable detail
+	        $this->breadTable = $this->dataType->breadTable;
+
+	        // Set User's Data & Row Level Access.
+	        $this->objAccessLevel = $this->getUserAccessLevel($this->scope->id);
+	        
+	        // Set User's accessiable Data Rows.
+	        $this->objAccessiableRow = $this->getAccessiableRows($this->dataType->id, $this->objAccessLevel->pluck('data_row_user_level_id')->unique()->toArray());
+    	}
+    }
+
+    /**
      * Generate a where condition to filter a data based on user's access on a data.
      * @param 	object 	DataType
      * @param 	array 	UserLevel
