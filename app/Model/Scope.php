@@ -13,4 +13,8 @@ class Scope extends Model
     	return $this->belongsTo('App\Model\DataType');
     }
 
+    // Relationship with ApiAction
+    public function apiAction(){
+    	return $this->belongsTo('App\Model\ApiAction');
+    }
 }
