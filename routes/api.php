@@ -28,7 +28,7 @@ Route::middleware(['auth:api', 'ValidateUserAccess', 'InitialiseSession'])->grou
 	    $strApiScopes = $scope->name;
 
 	    $arrResourceAction	=	$scope->apiAction()->select('name')->get()->pluck('name')->toArray();
-	    
+	    // dd($arrResourceAction);
 	    // Custom validation middleware
 	    if(!empty($scope->middleware)){
 	        $arrMiddleware[]	=	$scope->middleware;
@@ -38,13 +38,13 @@ Route::middleware(['auth:api', 'ValidateUserAccess', 'InitialiseSession'])->grou
 	    if(!empty($strApiScopes)){
         	$arrMiddleware[]	=	'scope:' .$strApiScopes;
         }
-
+        // dd($dataType);
         // If there is any middleware for a route then add it with a route.
-        if(empty($arrMiddleware)){
+        // if(empty($arrMiddleware)){
         	Route::resource($dataType->slug, $apiController, ["only"=>$arrResourceAction, "as" =>$strApiScopes]);
-        }
-        else{
-        	Route::resource($scope->slug, $apiController, ["only"=>$arrResourceAction])->middleware($arrMiddleware);
-        }
+        // }
+        // else{
+        // 	Route::resource($scope->slug, $apiController, ["only"=>$arrResourceAction])->middleware($arrMiddleware);
+        // }
 	}
 });
