@@ -8,4 +8,9 @@ class Scope extends Model
 {
     use \App\Model\CommonScope;
 
+    // Relationship with Datatype
+    public function dataType(){
+    	return $this->belongsTo('App\Model\DataType');
+    }
+
 }
