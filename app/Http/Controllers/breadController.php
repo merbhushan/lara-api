@@ -25,6 +25,25 @@ class breadController extends Controller
     {
         // update a user's Access.
         $this->objUserAccess->updateUsersAccess();
+
+        // Model Created.
+        $objModel = app($this->objUserAccess->dataType->model_name);
+
+        // Get joining tables data
+        $objTblJoins = $this->objUserAccess->dataType->joinTables;
+
+        // dd($objTblJoins);
+        foreach ($objTblJoins as $objTbl) {
+            $objModel = $objModel->join($objTbl->table_name, function($query)use($objTbl){
+                $objConditions = json_decode($objTbl->conditions);
+                foreach ($objConditions as $objCondition) {
+                    $query = $query->on($objCondition->param1, $objCondition->condition, $objCondition->param2);
+                }
+                return $query;
+            });
+        }
+
+        dd($objModel->get());
         
         if(!empty($request->getHeaders) && $request->getHeaders==1){
             $objHeaders = $this->objUserAccess->dataType->dataRow()->select(DB::raw('alias as value, display_name as text'))->isBrowsable()->skipHidden()->whereIn('id', $this->objUserAccess->objAccessiableRow)->orderBy('order')->get()->toArray();
