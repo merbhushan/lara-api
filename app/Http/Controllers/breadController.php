@@ -159,4 +159,21 @@ class breadController extends Controller
     {
         //
     }
+
+    /**
+     * Returns filter conditions at data level.
+     *
+     * @param   object  $dataType   Instance of App\Model\DataType
+     * @param   array   $arrUserLevel   User's level for a data
+     * @return  array
+     */
+    protected function getDataFilterCondition($dataType, $arrUserLevel){
+        return DB::table('data_type_user_level')
+            ->select('condition as where' , 'parameters')
+            ->where('data_type_id', $dataType)
+            ->whereIn('data_level_user_id', $arrUserLevel)
+            ->where('is_deleted', 0)
+            ->get()
+            ->toArray();
+    }
 }
