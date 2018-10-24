@@ -20,4 +20,13 @@ class DataType extends Model
     public function breadTable(){
     	return $this->belongsTo('App\Model\BreadTable');
     }
+
+    // Relationship with Table Relationships
+    public function relationships(){
+        return $this->hasMany('App\Model\Relationship');
+    }
+    // Relationship with table joins
+    public function joinTables(){
+        return $this->hasMany('App\Model\TableJoin');
+    }
 }
