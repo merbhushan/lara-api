@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Model\Scope;
 use App\Model\DataType;
+use App\Model\DataRow;
 use App\Model\Session;
 use DB;
 use App\Http\Controllers\accessManagerController;
