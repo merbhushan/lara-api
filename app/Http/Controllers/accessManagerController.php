@@ -48,15 +48,24 @@ class accessManagerController extends Controller
 	    	// Seting a scope
 	    	$this->scope = Scope::name($this->strScope)->with('dataType')->active()->first();
 
-	    	// Set DataType linked with a scope.
-	        $this->dataType = $this->scope->dataType;
+            // Set DataType linked with a scope.
+            $this->dataType = $this->scope->dataType;
 
-	        // Set a breadTable detail
-	        $this->breadTable = $this->dataType->breadTable;
+            // Set a breadTable detail
+            $this->breadTable = $this->dataType->breadTable;
 
-	        // Set User's Data & Row Level Access.
-	        $this->objAccessLevel = $this->getUserAccessLevel($this->scope->id);
-	        
+            // Set User's Data & Row Level Access.
+            $this->objAccessLevel = $this->getUserAccessLevel($this->scope->id);
+
+            // Basic user's access level 
+            $arrBasicAccessLevel = [
+                "data_type_user_level_id" => 1,
+                "data_row_user_level_id" => 1
+            ];
+            
+            // Add basic access level in array group
+            $this->objAccessLevel->push((object)$arrBasicAccessLevel);
+            
 	        // Set User's accessiable Data Rows.
 	        $this->objAccessiableRow = $this->getAccessiableRows($this->dataType->id, $this->objAccessLevel->pluck('data_row_user_level_id')->unique()->toArray());
     	}
