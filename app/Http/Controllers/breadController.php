@@ -40,37 +40,54 @@ class breadController extends Controller
                 foreach ($objConditions as $objCondition) {
                     $query = $query->on($objCondition->param1, $objCondition->condition, $objCondition->param2);
                 }
-                return $query;
             });
         }
 
-        dd($objModel->get());
+        // dd($objModel->selectRaw('helpdesks.id as helpdesk_id, users.id as user_id, users.fname')->get());
         
-        if(!empty($request->getHeaders) && $request->getHeaders==1){
-            $objHeaders = $this->objUserAccess->dataType->dataRow()->select(DB::raw('alias as value, display_name as text'))->isBrowsable()->skipHidden()->whereIn('id', $this->objUserAccess->objAccessiableRow)->orderBy('order')->get()->toArray();
-            return $this->httpResponse($objHeaders);
+        // if(!empty($request->getHeaders) && $request->getHeaders==1){
+        //     $objHeaders = $this->objUserAccess->dataType->dataRow()->select(DB::raw('alias as value, display_name as text'))->isBrowsable()->skipHidden()->whereIn('id', $this->objUserAccess->objAccessiableRow)->orderBy('order')->get()->toArray();
+        //     return $this->httpResponse($objHeaders);
+        // }
+
+        // Data leve filter condition
+        $objWhereClause = $this->getDataFilterCondition($this->objUserAccess->dataType->id, $this->objUserAccess->objAccessLevel->pluck('data_type_user_level_id')->unique()->toArray());
+
+        // Get from groups ids
+        $arrDataGroupIds = $this->objUserAccess->dataType->dataGroup->pluck('id')->toArray();
+
+        // Get Browsable fields which user have a access.
+        $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, group_concat(concat(" ", field, " as ", alias)) as fields'))
+            ->isBrowsable()
+            ->whereIn('id', $this->objUserAccess->objAccessiableRow)
+            ->groupBy('relationship_id')
+            ->orderBy('relationship_id')
+            ->get();
+
+        // Get Relationships 
+        $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
+        $strRawFields = '';
+
+        foreach ($objFields as $objField) {
+            if($objField->relationship_id === 0){
+                // Main Object Fields
+                $strFields = $objField->fields;
+            }
+            else{
+                $objRelationship = $objRelationships[$objField->relationship_id];
+                $strRawFields .= $objRelationship->primary_field;
+                // Generate Relationship Query
+                $objModel = $objModel->with([$objRelationship->name => function($query)use($objField, $objRelationship){
+                    $query->selectRaw($objRelationship->secondary_field .$objField->fields)
+                        ->whereRaw(!empty($objRelationship->condition)? $objRelationship->condition : 1);
+                }]);
+            }
         }
 
-        $objWhereClause = $this->getDataFilterCondition($this->objUserAccess->dataType->id, $this->objUserAccess->objAccessLevel->pluck('data_type_user_level_id')->unique()->toArray());
-        $fields = $this->objUserAccess->dataType->dataRow()->select(DB::raw('group_concat(concat(" ", field, " as ", alias)) as fields'))->isBrowsable()->whereIn('id', $this->objUserAccess->objAccessiableRow)->first();
-
-        $objListQuery = DB::table(DB::raw($this->objUserAccess->breadTable->list_table))
-            ->select(DB::raw($fields->fields))
-            ->where(function($query) use($objWhereClause){
-                
-                if(!empty($breadTable->where)){
-                // dd($breadyWhere);
-                    $query = $query->whereRaw($breadTable->where, self::generatePassingParamsArray($this->objUserAccess->breadTable->parameters));
-                }
-                foreach($objWhereClause as $objWhere){
-                    $query = $query->orWhereRaw($objWhere->where, self::generatePassingParamsArray($objWhere->parameters));
-                }
-                return $query;
-            });
-        $data = $objListQuery->get();
-            
-        return $this->httpResponse($data);
-            
+        // Fetch Result set
+        $objResults = $objModel->selectRaw($strRawFields .$strFields)->get();
+        
+        return $this->httpResponse($objResults);
     }
 
     /**
