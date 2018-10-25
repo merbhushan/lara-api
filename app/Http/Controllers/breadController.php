@@ -43,18 +43,23 @@ class breadController extends Controller
             });
         }
 
-        // dd($objModel->selectRaw('helpdesks.id as helpdesk_id, users.id as user_id, users.fname')->get());
+        // Get from groups ids
+        $arrDataGroupIds = $this->objUserAccess->dataType->dataGroup->pluck('id')->toArray();
         
-        // if(!empty($request->getHeaders) && $request->getHeaders==1){
-        //     $objHeaders = $this->objUserAccess->dataType->dataRow()->select(DB::raw('alias as value, display_name as text'))->isBrowsable()->skipHidden()->whereIn('id', $this->objUserAccess->objAccessiableRow)->orderBy('order')->get()->toArray();
-        //     return $this->httpResponse($objHeaders);
-        // }
+        if(!empty($request->getHeaders) && $request->getHeaders==1){
+            $objHeaders = DataRow::select(DB::raw('alias as value, display_name as text, listing_details as details'))
+                ->isBrowsable()
+                ->skipHidden()
+                ->whereIn('id', $this->objUserAccess->objAccessiableRow)
+                ->orderBy('listing_seq_no')
+                ->get()
+                ->toArray();
+            return $this->httpResponse($objHeaders);
+        }
 
         // Data leve filter condition
         $objWhereClause = $this->getDataFilterCondition($this->objUserAccess->dataType->id, $this->objUserAccess->objAccessLevel->pluck('data_type_user_level_id')->unique()->toArray());
 
-        // Get from groups ids
-        $arrDataGroupIds = $this->objUserAccess->dataType->dataGroup->pluck('id')->toArray();
 
         // Get Browsable fields which user have a access.
         $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, group_concat(concat(" ", field, " as ", alias)) as fields'))
@@ -86,7 +91,7 @@ class breadController extends Controller
 
         // Fetch Result set
         $objResults = $objModel->selectRaw($strRawFields .$strFields)->get();
-        
+
         return $this->httpResponse($objResults);
     }
 
