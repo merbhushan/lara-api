@@ -92,6 +92,7 @@ class breadController extends Controller
         // Fetch Result set
         $objResults = $objModel->selectRaw($strRawFields .$strFields)->get();
 
+        // Model Created.
         return $this->httpResponse($objResults);
     }
 
@@ -124,7 +125,29 @@ class breadController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        // update a user's Access.
+        $this->objUserAccess->updateUsersAccess();
+
+        // Get storable fields which user have a access.
+        $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, field, alias'))
+            ->isStorable()
+            ->whereIn('id', $this->objUserAccess->objAccessiableRow)
+            ->orderBy('relationship_id')
+            ->get()
+            ->groupBy('relationship_id');
+
+        // Model Created
+        $objModel = app($this->objUserAccess->dataType->model_name);
+
+        $objModelFields = $objFields[0];
+
+        foreach ($objModelFields as $objModelField) {
+            $objModel->{$objModelField->field} = $request->{$objModelField->alias};
+        }
+        $objModel->save();
+        dd($objModel);
+
+
     }
 
     /**
@@ -169,7 +192,85 @@ class breadController extends Controller
      */
     public function update(Request $request, $id)
     {
-        //
+        // $objHelpdesk = \App\Model\Helpdesk::find(4103);
+
+        // dd($objHelpdesk->tasks);
+
+        // update a user's Access.
+        $this->objUserAccess->updateUsersAccess();
+
+        // Model Created
+        $objModel = app($this->objUserAccess->dataType->model_name)::find($id);
+        if(!is_null($objModel)){
+            // Get updatable fields which user have a access.
+            $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, field, alias, is_pk'))
+                ->isStorable()
+                ->whereIn('id', $this->objUserAccess->objAccessiableRow)
+                ->orderBy('relationship_id')
+                ->get()
+                ->groupBy('relationship_id');
+
+            // Get Model's fields
+            $objModelFields = $objFields[0];
+
+            // Set Model's data
+            foreach ($objModelFields as $objModelField) {
+                $objModel->{$objModelField->field} = empty($request->{$objModelField->alias})? null : $request->{$objModelField->alias};
+            }
+
+            // Update Model
+            $objModel->save();
+
+            // Get Relationships 
+            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
+
+            // dd($objFields);
+            foreach ($objFields as $key => $objField) {
+                if($key !== 0){
+                    // dd($key);
+                    $objRelationship = $objRelationships[$key];
+                    // Perform action based on relationship type
+                    switch ($objRelationship->relationship_type_id) {
+                        case 4:
+                            // Sync Pivot table for Many to Many relationship
+                            $objModel->{$objRelationship->name}()->sync($request->{$objField[0]->alias});
+                            break;
+                        
+                        case 2:
+                            // Set Count
+                            $intCount = !empty($request->{$objField[0]->alias})?count($request->{$objField[0]->alias}):0;
+                            $arrData = [];
+
+                            for ($i=0; $i < $intCount; $i++) {
+                                foreach ($objField as $objDataRow) {
+                                    if($objDataRow->is_pk){
+                                        // Set PK id to 0 if empty
+                                        $intObjPkId = !empty($request->{$objDataRow->alias}[$i])? $request->{$objDataRow->alias}[$i] : 0;
+                                    }
+                                    else{
+                                        $arrData[$i][$objDataRow->field] = $request->{$objDataRow->alias}[$i];                                        
+                                    }
+                                }
+
+                                // If PK is not empty then update a data else create
+                                // Here updateOrCreate method was not working so we need to do separately
+                                if($intObjPkId > 0){
+                                    $objRelationshipModel = $objModel->{$objRelationship->name}()->find($intObjPkId);
+                                    $objRelationshipModel->update($arrData[$i]);
+                                }
+                                else{
+                                    $objRelationshipModel = $objModel->{$objRelationship->name}()->create($arrData[$i]);
+                                }
+                                
+                            }
+                            break;
+                    }
+                }
+            }
+        }
+        else{
+            // Redirect to invalid update id error route.
+        }
     }
 
     /**
