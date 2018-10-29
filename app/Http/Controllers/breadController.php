@@ -24,6 +24,11 @@ class breadController extends Controller
      */
     public function index(Request $request)
     {
+        $intRecordsPerPage = empty($request->recordsPerPage)?20:$request->recordsPerPage;
+        /* B_xxxxx [Del - START]*/
+        $objHelpDesk = \App\Model\Helpdesk::with('tasks')->selectRaw('created_by')->find([4103, 4099]);
+        /* B_xxxxx [Del - END]*/
+
         // update a user's Access.
         $this->objUserAccess->updateUsersAccess();
 
@@ -42,7 +47,7 @@ class breadController extends Controller
                 }
             });
         }
-
+        
         // Get from groups ids
         $arrDataGroupIds = $this->objUserAccess->dataType->dataGroup->pluck('id')->toArray();
         
@@ -72,7 +77,7 @@ class breadController extends Controller
         // Get Relationships 
         $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
         $strRawFields = '';
-
+        
         foreach ($objFields as $objField) {
             if($objField->relationship_id === 0){
                 // Main Object Fields
@@ -80,6 +85,7 @@ class breadController extends Controller
             }
             else{
                 $objRelationship = $objRelationships[$objField->relationship_id];
+                
                 $strRawFields .= $objRelationship->primary_field;
                 // Generate Relationship Query
                 $objModel = $objModel->with([$objRelationship->name => function($query)use($objField, $objRelationship){
@@ -90,8 +96,8 @@ class breadController extends Controller
         }
 
         // Fetch Result set
-        $objResults = $objModel->selectRaw($strRawFields .$strFields)->get();
-
+        $objResults = $objModel->selectRaw($strRawFields .$strFields)->paginate($intRecordsPerPage);
+        
         // Model Created.
         return $this->httpResponse($objResults);
     }
@@ -136,18 +142,61 @@ class breadController extends Controller
             ->get()
             ->groupBy('relationship_id');
 
-        // Model Created
-        $objModel = app($this->objUserAccess->dataType->model_name);
-
+        // Get Model's fields
         $objModelFields = $objFields[0];
 
-        foreach ($objModelFields as $objModelField) {
-            $objModel->{$objModelField->field} = $request->{$objModelField->alias};
+        if($objModelFields->count()){
+            // Model Created
+            $objModel = app($this->objUserAccess->dataType->model_name);
+
+            // Set Model's data
+            foreach ($objModelFields as $objModelField) {
+                $objModel->{$objModelField->field} = empty($request->{$objModelField->alias})? null : $request->{$objModelField->alias};
+            }
+
+            // Update Model
+            $objModel->save();
+
+            // Get Relationships 
+            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
+
+            foreach ($objFields as $key => $objField) {
+                // Key 0 is for Primary model fields && if relationship fields have many counts 
+                if($key !== 0 && $objField->count()){
+                    $objRelationship = $objRelationships[$key];
+                    // Perform action based on relationship type
+                    switch ($objRelationship->relationship_type_id) {
+                        case 4:
+                            // Sync Pivot table for Many to Many relationship
+                            $objModel->{$objRelationship->name}()->sync($request->{$objField[0]->alias});
+                            break;
+                        
+                        case 2:
+                            // Set Count
+                            $intCount = !empty($request->{$objField[0]->alias})?count($request->{$objField[0]->alias}):0;
+                            $arrData = [];
+
+                            for ($i=0; $i < $intCount; $i++) {
+                                foreach ($objField as $objDataRow) {
+                                    if(!$objDataRow->is_pk){
+                                        $arrData[$i][$objDataRow->field] = $request->{$objDataRow->alias}[$i];                                        
+                                    }
+                                }
+
+                                // Inserte data in hasMnay relationship
+                                    $objRelationshipModel = $objModel->{$objRelationship->name}()->create($arrData[$i]);
+                            }
+
+                            // Update hasMany Relationship data in Model
+                            $objModel->{$objRelationship->name};
+                            break;
+                    }
+                }
+            }
+
+            // Return a model in response
+            return $this->httpResponse($objModel);
         }
-        $objModel->save();
-        dd($objModel);
-
-
     }
 
     /**
@@ -192,10 +241,6 @@ class breadController extends Controller
      */
     public function update(Request $request, $id)
     {
-        // $objHelpdesk = \App\Model\Helpdesk::find(4103);
-
-        // dd($objHelpdesk->tasks);
-
         // update a user's Access.
         $this->objUserAccess->updateUsersAccess();
 
@@ -233,12 +278,16 @@ class breadController extends Controller
                     switch ($objRelationship->relationship_type_id) {
                         case 4:
                             // Sync Pivot table for Many to Many relationship
-                            $objModel->{$objRelationship->name}()->sync($request->{$objField[0]->alias});
+                            $objPivot = $objModel->{$objRelationship->name}()->sync($request->{$objField[0]->alias});
+
+                            // Update relationship data in a primary model
+                                $objModel->{$objRelationship->name} = $objPivot;
                             break;
                         
                         case 2:
                             // Set Count
                             $intCount = !empty($request->{$objField[0]->alias})?count($request->{$objField[0]->alias}):0;
+
                             $arrData = [];
 
                             for ($i=0; $i < $intCount; $i++) {
@@ -261,16 +310,26 @@ class breadController extends Controller
                                 else{
                                     $objRelationshipModel = $objModel->{$objRelationship->name}()->create($arrData[$i]);
                                 }
-                                
                             }
+
+                            // Update Relationship data
+                            $objModel->{$objRelationship->name};
+                            
                             break;
                     }
                 }
             }
+
+            // Return a model in response
+            return $this->httpResponse($objModel);
         }
         else{
             // Redirect to invalid update id error route.
         }
+    }
+
+    private function UpdateModel(Request $request, $intId){
+
     }
 
     /**
