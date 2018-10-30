@@ -12,8 +12,10 @@ use App\Model\Scope;
 | is assigned the "api" middleware group. Enjoy building your API!
 |
 */
+// Route for returning an error object in response.
 Route::get('error/{error}', 'exceptoinController@index');
-
+// To Get Combo Object
+Route::get('combo/{comboName}', 'htmlController@getCombo');
 // InitialiseSession middleware is being added to store global information into a session of a user once token is being validate by passport
 Route::middleware(['auth:api', 'ValidateUserAccess', 'InitialiseSession'])->group(function(){
 	$arrMiddleware	=	[];
@@ -28,7 +30,7 @@ Route::middleware(['auth:api', 'ValidateUserAccess', 'InitialiseSession'])->grou
 	    $strApiScopes = $scope->name;
 
 	    $arrResourceAction	=	$scope->apiAction()->select('name')->get()->pluck('name')->toArray();
-	    // dd($arrResourceAction);
+	    
 	    // Custom validation middleware
 	    if(!empty($scope->middleware)){
 	        $arrMiddleware[]	=	$scope->middleware;
@@ -38,7 +40,7 @@ Route::middleware(['auth:api', 'ValidateUserAccess', 'InitialiseSession'])->grou
 	    if(!empty($strApiScopes)){
         	$arrMiddleware[]	=	'scope:' .$strApiScopes;
         }
-        // dd($dataType);
+        
         // If there is any middleware for a route then add it with a route.
         // if(empty($arrMiddleware)){
         	Route::resource($dataType->slug, $apiController, ["only"=>$arrResourceAction, "as" =>$strApiScopes]);
