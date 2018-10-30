@@ -25,10 +25,7 @@ class breadController extends Controller
     public function index(Request $request)
     {
         $intRecordsPerPage = empty($request->recordsPerPage)?20:$request->recordsPerPage;
-        /* B_xxxxx [Del - START]*/
-        $objHelpDesk = \App\Model\Helpdesk::with('tasks')->selectRaw('created_by')->find([4103, 4099]);
-        /* B_xxxxx [Del - END]*/
-
+        
         // update a user's Access.
         $this->objUserAccess->updateUsersAccess();
 
@@ -38,9 +35,14 @@ class breadController extends Controller
         // Get joining tables data
         $objTblJoins = $this->objUserAccess->dataType->joinTables;
 
-        // dd($objTblJoins);
         foreach ($objTblJoins as $objTbl) {
-            $objModel = $objModel->join($objTbl->table_name, function($query)use($objTbl){
+            $strJoinType = 'join';
+            switch ($objTbl->join_type_id) {
+                case 2:
+                    $strJoinType = 'leftJoin';
+                    break;
+            }
+            $objModel = $objModel->{$strJoinType}($objTbl->table_name, function($query)use($objTbl){
                 $objConditions = json_decode($objTbl->conditions);
                 foreach ($objConditions as $objCondition) {
                     $query = $query->on($objCondition->param1, $objCondition->condition, $objCondition->param2);
@@ -77,6 +79,7 @@ class breadController extends Controller
         // Get Relationships 
         $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
         $strRawFields = '';
+        // dd($objFields);
         
         foreach ($objFields as $objField) {
             if($objField->relationship_id === 0){
