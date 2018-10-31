@@ -3,9 +3,12 @@
 namespace App\Model;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class DataRow extends Model
 {	
+    use SoftDeletes;
+
 	// Scope is added to exclue hidden type fields
     public function scopeSkipHidden($query){
     	return $query->where('is_hidden_in_listing', '<>', 1);
