@@ -16,6 +16,17 @@ class DataRow extends Model
     	return $query->where('browse', 1);
     }
 
+    // updatable field scope
+    public function scopeIsUpdatable($query){
+    	return $query->where(function($query){
+    		$query->where('update', 1)
+    			->orWhere(function($query){
+    				$query->where('edit', 1)
+    					->whereNull('update');
+    			});
+    	});
+    }
+
     // storable field scope
     public function scopeIsStorable($query){
     	return $query->where(function($query){
