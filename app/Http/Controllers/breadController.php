@@ -281,7 +281,6 @@ class breadController extends Controller
             // Get Relationships 
             $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
 
-            // dd($objFields);
             foreach ($objFields as $key => $objField) {
                 if($key !== 0){
                     // dd($key);
@@ -316,8 +315,12 @@ class breadController extends Controller
                                 // If PK is not empty then update a data else create
                                 // Here updateOrCreate method was not working so we need to do separately
                                 if($intObjPkId > 0){
+                                    // Relationship model object
                                     $objRelationshipModel = $objModel->{$objRelationship->name}()->find($intObjPkId);
-                                    $objRelationshipModel->update($arrData[$i]);
+                                    // If not empty or null then update
+                                    if($objRelationshipModel){
+                                        $objRelationshipModel->update($arrData[$i]);
+                                    }
                                 }
                                 else{
                                     $objRelationshipModel = $objModel->{$objRelationship->name}()->create($arrData[$i]);
