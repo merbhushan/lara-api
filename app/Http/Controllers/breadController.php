@@ -255,6 +255,7 @@ class breadController extends Controller
 
         // Model Created
         $objModel = app($this->objUserAccess->dataType->model_name)::find($id);
+
         if(!is_null($objModel)){
             // Get updatable fields which user have a access.
             $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, field, alias, is_pk'))
@@ -264,6 +265,7 @@ class breadController extends Controller
                 ->orderBy('relationship_id')
                 ->get()
                 ->groupBy('relationship_id');
+
 
             // Get Model's fields
             $objModelFields = $objFields[0];
@@ -368,5 +370,68 @@ class breadController extends Controller
             ->where('is_deleted', 0)
             ->get()
             ->toArray();
+    }
+
+    /**
+     *  This function is being used to perform action using update.
+     * @param   $request
+     * @param   $id
+     */
+    protected function performAction(Request $request, $id){
+        // update a user's Access.
+        $this->objUserAccess->updateUsersAccess();
+
+        // Model Created
+        $objModel = app($this->objUserAccess->dataType->model_name)::find($id);
+        // dd($this->objUserAccess->objAccessiableRow);
+        if(!is_null($objModel)){
+            // Get updatable fields which user have a access.
+            $objAction = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, field, alias, is_pk, details'))
+                ->isUpdatable()
+                ->whereIn('id', $this->objUserAccess->objAccessiableRow)
+                ->where('id', $request->fId)
+                ->whereIn('edit_element_type_id', [12])
+                ->first();
+
+            if($objAction){
+                // If relationship id is not zero then action will be performed on relationship model else on a requested model
+                // rId in request varaible will decides a relationship model selection so it can no be zero empty or a zero.
+                if($objAction->relationship_id > 0 && !empty($request->rId) && $request->rId >0){
+                    $objRelationship = $this->objUserAccess->dataType->relationships->find($objAction->relationship_id);
+                    $objActionModel = $objModel->{$objRelationship->name}()->find($request->rId);
+                }
+                else{
+                    $objActionModel = $objModel;
+                }
+                
+                if($objActionModel){
+                    $objDetails = json_decode($objAction->details);
+
+                    // Base on type we will decides a what should be set in a value. if type was not being set then set provided value.
+                    if(empty($objDetails->action->type)){
+                        $value = empty($objDetails->action->value)?null:$objDetails->action->value;
+                    }
+                    else{
+                        switch ($objDetails->action->type) {
+                            case 'timestamp':
+                                $value = date('Y-m-d H:i:s');
+                                break;
+                            case 'date':
+                                $value = date('Y-m-d');
+                                break;
+                            case 'null':
+                                $value = null;
+                                break;
+                        }
+                    }
+                    $objActionModel->{$objAction->field} = $value;
+                    $objActionModel->save();
+                    return $this->httpResponse($objActionModel);
+                }
+                return redirect('api/error/INVALID_ACTION_KEY');
+            }
+            // Return access denied for a action error
+            return redirect('api/error/ACTION_ACCESS_DENED');
+        }
     }
 }
