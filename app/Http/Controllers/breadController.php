@@ -343,10 +343,6 @@ class breadController extends Controller
         }
     }
 
-    private function UpdateModel(Request $request, $intId){
-
-    }
-
     /**
      * Remove the specified resource from storage.
      *
@@ -355,7 +351,16 @@ class breadController extends Controller
      */
     public function destroy($id)
     {
-        //
+        // update a user's Access.
+        $this->objUserAccess->updateUsersAccess();
+
+        // Model Created
+        $objModel = app($this->objUserAccess->dataType->model_name)::find($id);
+
+        if($objModel){
+            $objModel->delete();
+            $this->httpResponse($objModel);
+        }
     }
 
     /**
