@@ -243,7 +243,13 @@ class breadController extends Controller
      * @return \Illuminate\Http\Response
      */
     public function update(Request $request, $id)
-    {
+    {   
+        // fId in request will decides a  types of operation was being performed on a user's request.
+        // If it's not empty then it's indicates that some action will be performed on a Model Or relationship.
+        if(!empty($request->fId) && $request->fId>0){
+            return $this->performAction($request, $id);
+        }
+
         // update a user's Access.
         $this->objUserAccess->updateUsersAccess();
 
