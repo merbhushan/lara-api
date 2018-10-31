@@ -252,7 +252,7 @@ class breadController extends Controller
         if(!is_null($objModel)){
             // Get updatable fields which user have a access.
             $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, field, alias, is_pk'))
-                ->isStorable()
+                ->isUpdatable()
                 ->whereIn('id', $this->objUserAccess->objAccessiableRow)
                 ->orderBy('relationship_id')
                 ->get()
