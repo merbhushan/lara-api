@@ -254,6 +254,7 @@ class breadController extends Controller
             $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, field, alias, is_pk'))
                 ->isUpdatable()
                 ->whereIn('id', $this->objUserAccess->objAccessiableRow)
+                ->whereNotIn('edit_element_type_id', [12])
                 ->orderBy('relationship_id')
                 ->get()
                 ->groupBy('relationship_id');
