@@ -64,9 +64,8 @@ class breadController extends Controller
             return $this->httpResponse($objHeaders);
         }
 
-        // Data leve filter condition
+        // Data level filter condition
         $objWhereClause = $this->getDataFilterCondition($this->objUserAccess->dataType->id, $this->objUserAccess->objAccessLevel->pluck('data_type_user_level_id')->unique()->toArray());
-
 
         // Get Browsable fields which user have a access.
         $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, group_concat(concat(" ", field, " as ", alias)) as fields'))
@@ -371,13 +370,35 @@ class breadController extends Controller
      * @return  array
      */
     protected function getDataFilterCondition($dataType, $arrUserLevel){
-        return DB::table('data_type_user_level')
-            ->select('condition as where' , 'parameters')
+        $strWhere = '(';
+        $params = [];
+
+        // Get data level where clause.
+        $objWheres = DB::table('data_type_user_level')
+            ->select('condition' , 'parameters as params')
             ->where('data_type_id', $dataType)
             ->whereIn('data_level_user_id', $arrUserLevel)
             ->where('is_deleted', 0)
-            ->get()
-            ->toArray();
+            ->get();
+        foreach ($objWheres as $objWhere) {
+            $arrParams = collect(json_decode($objWhere->params));
+            foreach ($arrParams as $param) {
+                $params[]=session($param, null);
+            }
+            // dd($params);
+            $strWhere .= '( ' .$objWhere->condition .') OR';
+        }
+        if(strlen($strWhere) > 1){
+            $strWhere = substr($strWhere, 0, -3) .')';
+        }
+        else{
+            $strWhere = '';
+        }
+
+        return [
+            'condition' => $strWhere,
+            'params' => $params
+        ];
     }
 
     /**

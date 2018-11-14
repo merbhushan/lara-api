@@ -15,11 +15,11 @@ use App\Model\Scope;
 // Route for returning an error object in response.
 Route::get('error/{error}', 'exceptoinController@index');
 // To Get Combo Object
-Route::get('combo/{comboName}', 'htmlController@getCombo');
 // InitialiseSession middleware is being added to store global information into a session of a user once token is being validate by passport
 Route::middleware(['auth:api', 'ValidateUserAccess', 'InitialiseSession'])->group(function(){
+Route::get('combo/{comboName}', 'htmlController@getCombo');
 	$arrMiddleware	=	[];
-	foreach (Scope::where('is_active', 1)->get() as $scope) {
+	foreach (Scope::where('is_active', 1)->where('portal_id', '!=', 3)->whereNotNull('data_type_id')->get() as $scope) {
 		$dataType = $scope->dataType;
 		
 		// Fetch action controller. Default is breadController
