@@ -16,18 +16,23 @@ class DataRow extends Model
 
     // browse scope
     public function scopeIsBrowsable($query){
-    	return $query->where('browse', 1);
+        return $query->where('browse', 1);
     }
 
     // updatable field scope
     public function scopeIsUpdatable($query){
-    	return $query->where(function($query){
-    		$query->where('update', 1)
-    			->orWhere(function($query){
-    				$query->where('edit', 1)
-    					->whereNull('update');
-    			});
-    	});
+        return $query->where(function($query){
+            $query->where('update', 1)
+                ->orWhere(function($query){
+                    $query->where('edit', 1)
+                        ->whereNull('update');
+                });
+        });
+    }
+
+    // View scope
+    public function scopeIsViewable($query){
+    	return $query->where('read', 1);
     }
 
     // storable field scope
