@@ -368,7 +368,7 @@ class breadController extends Controller
             $objModel->save();
 
             // get updated fields of model to provide in a response.
-            $objModel = app($this->objUserAccess->dataType->model_name)::selectRaw(implode(", ", $arrModelFields))->find($id);
+            $objResponse = app($this->objUserAccess->dataType->model_name)::selectRaw(implode(", ", $arrModelFields))->find($id);
 
             // Get Relationships 
             $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
@@ -428,7 +428,7 @@ class breadController extends Controller
             }
 
             // Return a model in response
-            return $this->httpResponse($objModel);
+            return $this->httpResponse($objResponse);
         }
         else{
             // Redirect to invalid update id error route.
