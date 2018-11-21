@@ -356,14 +356,19 @@ class breadController extends Controller
 
             // Get Model's fields
             $objModelFields = $objFields[0];
-
+            
+            $arrModelFields = [];
             // Set Model's data
             foreach ($objModelFields as $objModelField) {
                 $objModel->{$objModelField->field} = empty($request->{$objModelField->alias})? null : $request->{$objModelField->alias};
+                $arrModelFields[]=$objModelField->field .' as ' .$objModelField->alias;
             }
 
             // Update Model
             $objModel->save();
+
+            // get updated fields of model to provide in a response.
+            $objModel = app($this->objUserAccess->dataType->model_name)::selectRaw(implode(", ", $arrModelFields))->find($id);
 
             // Get Relationships 
             $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
