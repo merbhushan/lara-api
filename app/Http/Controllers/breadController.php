@@ -66,7 +66,6 @@ class breadController extends Controller
 
         // Data level filter condition
         $objWhereClause = $this->getDataFilterCondition($this->objUserAccess->dataType->id, $this->objUserAccess->objAccessLevel->pluck('data_type_user_level_id')->unique()->toArray());
-
         // Get Browsable fields which user have a access.
         $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, group_concat(concat(" ", field, " as ", alias)) as fields'))
             ->isBrowsable()
@@ -75,33 +74,39 @@ class breadController extends Controller
             ->orderBy('relationship_id')
             ->get();
 
-        // Get Relationships 
-        $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
-        $strRawFields = '';
-        // dd($objFields);
-        
-        foreach ($objFields as $objField) {
-            if($objField->relationship_id === 0){
-                // Main Object Fields
-                $strFields = $objField->fields;
-            }
-            else{
-                $objRelationship = $objRelationships[$objField->relationship_id];
-                
-                $strRawFields .= $objRelationship->primary_field;
-                // Generate Relationship Query
-                $objModel = $objModel->with([$objRelationship->name => function($query)use($objField, $objRelationship){
-                    $query->selectRaw($objRelationship->secondary_field .$objField->fields)
-                        ->whereRaw(!empty($objRelationship->condition)? $objRelationship->condition : 1);
-                }]);
-            }
-        }
+        if($objFields->count()){
+            // Get Relationships 
+            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
+            // Initialize variables for fields.
+            $strRawFields = '';
+            $strFields = '';
 
-        // Fetch Result set
-        $objResults = $objModel->selectRaw($strRawFields .$strFields)->paginate($intRecordsPerPage);
+            foreach ($objFields as $objField) {
+                if($objField->relationship_id === 0){
+                    // Main Object Fields
+                    $strFields = $objField->fields;
+                }
+                else{
+                    $objRelationship = $objRelationships[$objField->relationship_id];
+                    
+                    $strRawFields .= $objRelationship->primary_field;
+                    // Generate Relationship Query
+                    $objModel = $objModel->with([$objRelationship->name => function($query)use($objField, $objRelationship){
+                        $query->selectRaw($objRelationship->secondary_field .$objField->fields)
+                            ->whereRaw(!empty($objRelationship->condition)? $objRelationship->condition : 1);
+                    }]);
+                }
+            }
+
+            // Fetch Result set
+            $objResults = $objModel->selectRaw($strRawFields .$strFields)->paginate($intRecordsPerPage);
+            
+            // Model Created.
+            return $this->httpResponse($objResults);
+        }
+        // Redirect to No data found.
+        return redirect('api/error/BROWSABLE_FIELDS_ACCESS_DENIED');
         
-        // Model Created.
-        return $this->httpResponse($objResults);
     }
 
     /**
