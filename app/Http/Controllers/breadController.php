@@ -66,6 +66,7 @@ class breadController extends Controller
 
         // Data level filter condition
         $objWhereClause = $this->getDataFilterCondition($this->objUserAccess->dataType->id, $this->objUserAccess->objAccessLevel->pluck('data_type_user_level_id')->unique()->toArray());
+        // dd($objWhereClause);
         // Get Browsable fields which user have a access.
         $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, group_concat(concat(" ", field, " as ", alias)) as fields'))
             ->isBrowsable()
@@ -97,9 +98,14 @@ class breadController extends Controller
                     }]);
                 }
             }
+            $objModel = $objModel->selectRaw($strRawFields .$strFields);
+
+            if(!empty($objWhereClause["condition"])){
+                $objModel = $objModel->whereRaw($objWhereClause["condition"], $objWhereClause["params"]);
+            }
 
             // Fetch Result set
-            $objResults = $objModel->selectRaw($strRawFields .$strFields)->paginate($intRecordsPerPage);
+            $objResults = $objModel->paginate($intRecordsPerPage);
             
             // Model Created.
             return $this->httpResponse($objResults);
