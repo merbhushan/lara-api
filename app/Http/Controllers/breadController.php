@@ -368,20 +368,35 @@ class breadController extends Controller
             }
 
             // Get Model's fields
-            $objModelFields = $objFields[0];
-            
-            $arrModelFields = [];
-            // Set Model's data
-            foreach ($objModelFields as $objModelField) {
-                $objModel->{$objModelField->field} = empty($request->{$objModelField->alias})? null : $request->{$objModelField->alias};
-                $arrModelFields[]=$objModelField->field .' as ' .$objModelField->alias;
+            if(!empty($objFields[0])){
+                $objModelFields = $objFields[0];
+                
+                $arrModelFields = [];
+
+                // Set Model's data
+                foreach ($objModelFields as $objModelField) {
+                    // if a parameter value should being calculated then algorithm is being passed in details and using eval it's being calculated and saved in request object.
+                    $objDetails = json_decode($objModelField->details);
+                    if(!empty($objDetails->update->value)){
+                        eval("\$request->{\$objModelField->alias} = " .$objDetails->update->value);
+                    }
+                    // if parameters are present in request then it's being updated else remain as it is.
+                    if(isset($request->{$objModelField->alias})){
+                        $objModel->{$objModelField->field} = $request->{$objModelField->alias};
+                    }                    
+                    $arrModelFields[]=$objModelField->field .' as ' .$objModelField->alias;
+                }
+
+                // Update Model
+                $objModel->save();
+
+                // get updated fields of model to provide in a response.
+                $objResponse = app($this->objUserAccess->dataType->model_name)::selectRaw(implode(", ", $arrModelFields))->find($id);
             }
-
-            // Update Model
-            $objModel->save();
-
-            // get updated fields of model to provide in a response.
-            $objResponse = app($this->objUserAccess->dataType->model_name)::selectRaw(implode(", ", $arrModelFields))->find($id);
+            else{
+                $objResponse = app($this->objUserAccess->dataType->model_name);
+                $objResponse = $objResponse->selectRaw($objResponse->getKeyName())->find($id);
+            }
 
             // Get Relationships 
             $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
