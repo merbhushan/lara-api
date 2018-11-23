@@ -459,7 +459,8 @@ class breadController extends Controller
             return $this->httpResponse($objResponse);
         }
         else{
-            // Redirect to invalid update id error route.
+            // Redirect to invalid model error route.
+            return redirect ('api/error/INVALID_MODEL');
         }
     }
 
@@ -479,8 +480,9 @@ class breadController extends Controller
 
         if($objModel){
             $objModel->delete();
-            $this->httpResponse($objModel);
+            return redirect('api/error/RECORD_DELETED');
         }
+        return redirect('api/error/NO_DATA_DELETED');
     }
 
     /**
