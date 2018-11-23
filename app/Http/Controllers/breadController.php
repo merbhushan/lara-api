@@ -493,6 +493,7 @@ class breadController extends Controller
             // Update updated by
             if(isset($objModel->blnUpdateDeleteByInfo) && $objModel->blnUpdateDeleteByInfo == 1){
                 $objModel->deleted_by = session('user_id', null);
+                $objModel->save();
             }
             $objModel->delete();
             return redirect('api/error/RECORD_DELETED');
