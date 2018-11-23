@@ -173,7 +173,13 @@ class breadController extends Controller
                 // if a parameter is not in request object then set it to null
                 $objModel->{$objModelField->field} = isset($request->{$objModelField->alias})? $request->{$objModelField->alias} : null;
             }
-            
+
+            // Update created by & updated by info
+            if(isset($objModel->blnStoreUserInfo) && $objModel->blnStoreUserInfo == 1){
+                $objModel->created_by = session('user_id', null);
+                $objModel->updated_by = session('user_id', null);
+            }
+
             // Update Model
             $objModel->save();
 
@@ -385,6 +391,11 @@ class breadController extends Controller
                         $objModel->{$objModelField->field} = $request->{$objModelField->alias};
                     }                    
                     $arrModelFields[]=$objModelField->field .' as ' .$objModelField->alias;
+                }
+
+                // Update updated by
+                if(isset($objModel->blnStoreUserInfo) && $objModel->blnStoreUserInfo == 1){
+                    $objModel->updated_by = session('user_id', null);
                 }
 
                 // Update Model
