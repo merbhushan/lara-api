@@ -1,0 +1,9 @@
+diff a/config/app.php b/config/app.php	(rejected hunks)
+@@ -164,6 +164,7 @@
+          * Package Service Providers...
+          */
+         Barryvdh\Cors\ServiceProvider::class,
++        Aws\Laravel\AwsServiceProvider::class,
+         
+         /*
+          * Application Service Providers...
