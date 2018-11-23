@@ -8,4 +8,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class ResourceRequirement extends Model
 {
     use SoftDeletes;
+
+	public $blnStoreUserInfo=1;
 }
