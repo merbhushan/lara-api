@@ -217,6 +217,9 @@ class breadController extends Controller
             // Return a model in response
             return $this->httpResponse($objModel);
         }
+        else{
+            return redirect('api/error/STORABLE_FIELDS_ACCESS_DENIED');
+        }
     }
 
     /**
