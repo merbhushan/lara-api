@@ -360,6 +360,9 @@ class breadController extends Controller
                 ->get()
                 ->groupBy('relationship_id');
 
+            if(!count($objFields)){
+                return redirect('api/error/UPDATABLE_FIELDS_ACCESS_DENIED');
+            }
 
             // Get Model's fields
             $objModelFields = $objFields[0];
