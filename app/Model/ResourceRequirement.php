@@ -10,4 +10,5 @@ class ResourceRequirement extends Model
     use SoftDeletes;
 
 	public $blnStoreUserInfo=1;
+	public $blnUpdateDeleteByInfo =1;
 }
