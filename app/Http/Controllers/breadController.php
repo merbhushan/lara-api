@@ -148,7 +148,7 @@ class breadController extends Controller
         $this->objUserAccess->updateUsersAccess();
 
         // Get storable fields which user have a access.
-        $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, field, alias'))
+        $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, details, field, alias'))
             ->isStorable()
             ->whereIn('id', $this->objUserAccess->objAccessiableRow)
             ->orderBy('relationship_id')
@@ -161,12 +161,19 @@ class breadController extends Controller
         if($objModelFields->count()){
             // Model Created
             $objModel = app($this->objUserAccess->dataType->model_name);
-
+            
             // Set Model's data
             foreach ($objModelFields as $objModelField) {
-                $objModel->{$objModelField->field} = empty($request->{$objModelField->alias})? null : $request->{$objModelField->alias};
+                // if a parameter value should being calculated then algorithm is being passed in details and using eval it's being calculated and saved in request object.
+                $objDetails = json_decode($objModelField->details);
+                if(!empty($objDetails->store->value)){
+                    eval("\$request->{\$objModelField->alias} = " .$objDetails->store->value);
+                }
+                
+                // if a parameter is not in request object then set it to null
+                $objModel->{$objModelField->field} = isset($request->{$objModelField->alias})? $request->{$objModelField->alias} : null;
             }
-
+            
             // Update Model
             $objModel->save();
 
