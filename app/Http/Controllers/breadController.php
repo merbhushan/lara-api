@@ -77,7 +77,7 @@ class breadController extends Controller
 
         if($objFields->count()){
             // Get Relationships 
-            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
+            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('relationship_type_id');
             // Initialize variables for fields.
             $strRawFields = '';
             $strFields = '';
