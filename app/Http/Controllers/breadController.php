@@ -144,6 +144,7 @@ class breadController extends Controller
      */
     public function store(Request $request)
     {
+        // dd($request->skills);
         // update a user's Access.
         $this->objUserAccess->updateUsersAccess();
 
@@ -184,7 +185,7 @@ class breadController extends Controller
             $objModel->save();
 
             // Get Relationships 
-            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
+            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('relationship_type_id');
 
             foreach ($objFields as $key => $objField) {
                 // Key 0 is for Primary model fields && if relationship fields have many counts 
@@ -276,7 +277,7 @@ class breadController extends Controller
 
         if($objFields->count()){
             // Get Relationships 
-            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
+            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('relationship_type_id');
             // Initialize variables for fields.
             $strRawFields = '';
             $strFields = '';
@@ -410,7 +411,7 @@ class breadController extends Controller
             }
 
             // Get Relationships 
-            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
+            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('relationship_type_id');
 
             foreach ($objFields as $key => $objField) {
                 if($key !== 0){

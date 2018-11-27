@@ -11,4 +11,9 @@ class ResourceRequirement extends Model
 
 	public $blnStoreUserInfo=1;
 	public $blnUpdateDeleteByInfo =1;
+
+	// Has Many relationship with Skills.
+	public function skills(){
+		return $this->hasMany('App\Model\Skill');
+	}
 }
