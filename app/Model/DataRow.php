@@ -45,4 +45,8 @@ class DataRow extends Model
     			});
     	});
     }
+
+    public function getDetailAttribute($value){
+        return json_decode($value);
+    }
 }

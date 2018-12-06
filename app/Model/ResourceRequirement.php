@@ -16,4 +16,9 @@ class ResourceRequirement extends Model
 	public function skills(){
 		return $this->hasMany('App\Model\Skill');
 	}
+
+	public function getSkillsAttribute($value)
+    {
+        return json_decode($value);
+    }
 }
