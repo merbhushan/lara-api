@@ -144,7 +144,6 @@ class breadController extends Controller
      */
     public function store(Request $request)
     {
-        // dd($request->skills);
         // update a user's Access.
         $this->objUserAccess->updateUsersAccess();
 
@@ -166,9 +165,8 @@ class breadController extends Controller
             // Set Model's data
             foreach ($objModelFields as $objModelField) {
                 // if a parameter value should being calculated then algorithm is being passed in details and using eval it's being calculated and saved in request object.
-                $objDetails = json_decode($objModelField->details);
-                if(!empty($objDetails->store->value)){
-                    eval("\$request->{\$objModelField->alias} = " .$objDetails->store->value);
+                if(!empty($objModelField->details->store->value)){
+                    eval("\$request->{\$objModelField->alias} = " .$objModelField->details->store->value);
                 }
                 
                 // if a parameter is not in request object then set it to null
@@ -383,9 +381,8 @@ class breadController extends Controller
                 // Set Model's data
                 foreach ($objModelFields as $objModelField) {
                     // if a parameter value should being calculated then algorithm is being passed in details and using eval it's being calculated and saved in request object.
-                    $objDetails = json_decode($objModelField->details);
-                    if(!empty($objDetails->update->value)){
-                        eval("\$request->{\$objModelField->alias} = " .$objDetails->update->value);
+                    if(!empty($objModelField->details->update->value)){
+                        eval("\$request->{\$objModelField->alias} = " .$objModelField->details->update->value);
                     }
                     // if parameters are present in request then it's being updated else remain as it is.
                     if(isset($request->{$objModelField->alias})){
@@ -403,7 +400,7 @@ class breadController extends Controller
                 $objModel->save();
 
                 // get updated fields of model to provide in a response.
-                $objResponse = app($this->objUserAccess->dataType->model_name)::selectRaw(implode(", ", $arrModelFields))->find($id);
+                $objResponse = app($this->objUserAccess->dataType->model_name)->select($arrModelFields)->find($id);
             }
             else{
                 $objResponse = app($this->objUserAccess->dataType->model_name);
@@ -554,7 +551,7 @@ class breadController extends Controller
         $objModel = app($this->objUserAccess->dataType->model_name)::find($id);
         // dd($this->objUserAccess->objAccessiableRow);
         if(!is_null($objModel)){
-            // Get updatable fields which user have a access.
+            // Get actionable fields which user have a access.
             $objAction = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, field, alias, is_pk, details'))
                 ->isUpdatable()
                 ->whereIn('id', $this->objUserAccess->objAccessiableRow)
@@ -564,7 +561,7 @@ class breadController extends Controller
 
             if($objAction){
                 // If relationship id is not zero then action will be performed on relationship model else on a requested model
-                // rId in request varaible will decides a relationship model selection so it can no be zero empty or a zero.
+                //rId in request varaible will decides a relationship model selection so it can not be empty or zero while performing action on relationship model.
                 if($objAction->relationship_id > 0 && !empty($request->rId) && $request->rId >0){
                     $objRelationship = $this->objUserAccess->dataType->relationships->find($objAction->relationship_id);
                     $objActionModel = $objModel->{$objRelationship->name}()->find($request->rId);
@@ -574,14 +571,12 @@ class breadController extends Controller
                 }
                 
                 if($objActionModel){
-                    $objDetails = json_decode($objAction->details);
-
                     // Base on type we will decides a what should be set in a value. if type was not being set then set provided value.
-                    if(empty($objDetails->action->type)){
-                        $value = empty($objDetails->action->value)?null:$objDetails->action->value;
+                    if(empty($objAction->details->action->type)){
+                        $value = empty($objAction->details->action->value)?null:$objAction->details->action->value;
                     }
                     else{
-                        switch ($objDetails->action->type) {
+                        switch ($objAction->details->action->type) {
                             case 'timestamp':
                                 $value = date('Y-m-d H:i:s');
                                 break;
@@ -595,12 +590,14 @@ class breadController extends Controller
                     }
                     $objActionModel->{$objAction->field} = $value;
                     $objActionModel->save();
-                    return $this->httpResponse($objActionModel);
+                    return redirect('api/error/RECORD_UPDATED_SUCCESSFULLY');
                 }
                 return redirect('api/error/INVALID_ACTION_KEY');
             }
             // Return access denied for a action error
             return redirect('api/error/ACTION_ACCESS_DENED');
         }
+        // Return access denied if model not found.
+        return redirect('api/error/NO_DATA_FOUND');
     }
 }
