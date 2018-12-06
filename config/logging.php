@@ -34,6 +34,12 @@ return [
     */
 
     'channels' => [
+        'production_stack' => [
+            'driver' => 'stack',
+            'tap' => [Freshbitsweb\LaravelLogEnhancer\LogEnhancer::class],
+            'channels' => ['daily', 'slack'],
+        ],
+        
         'stack' => [
             'driver' => 'stack',
             'channels' => ['daily'],
