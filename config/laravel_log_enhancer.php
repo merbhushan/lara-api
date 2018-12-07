@@ -5,7 +5,7 @@ return [
 
     'log_input_data' => true,
 
-    'log_request_headers' => false,
+    'log_request_headers' => true,
 
     'log_session_data' => true,
 
