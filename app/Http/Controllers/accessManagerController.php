@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Model\Scope;
 use DB;
+use Redis;
 
 class accessManagerController extends Controller
 {
@@ -45,8 +46,9 @@ class accessManagerController extends Controller
     	}
 
     	if(!empty($this->strScope) && !empty($this->intUserId)){
-	    	// Seting a scope
-	    	$this->scope = Scope::name($this->strScope)->with('dataType')->active()->first();
+            $objUserAccessDetail = json_decode(Redis::hget('user:' .$this->intUserId, $this->strScope .'_access'));
+            // Seting a scope
+    	    $this->scope = Scope::name($this->strScope)->with('dataType')->active()->first();
 
             // Set DataType linked with a scope.
             $this->dataType = $this->scope->dataType;
@@ -54,20 +56,36 @@ class accessManagerController extends Controller
             // Set a breadTable detail
             $this->breadTable = $this->dataType->breadTable;
 
-            // Set User's Data & Row Level Access.
-            $this->objAccessLevel = $this->getUserAccessLevel($this->scope->id);
+            // If User's access data is not being cached for this scope then find access and set in cache else set data from cache.
+            if(is_null($objUserAccessDetail)){
+                // Set User's Data & Row Level Access.
+                $this->objAccessLevel = $this->getUserAccessLevel($this->scope->id);
 
-            // Basic user's access level 
-            $arrBasicAccessLevel = [
-                "data_type_user_level_id" => 1,
-                "data_row_user_level_id" => 1
-            ];
-            
-            // Add basic access level in array group
-            $this->objAccessLevel->push((object)$arrBasicAccessLevel);
-            
-	        // Set User's accessiable Data Rows.
-	        $this->objAccessiableRow = $this->getAccessiableRows($this->dataType->id, $this->objAccessLevel->pluck('data_row_user_level_id')->unique()->toArray());
+                // Basic user's access level 
+                $arrBasicAccessLevel = [
+                    "data_type_user_level_id" => 1,
+                    "data_row_user_level_id" => 1
+                ];
+                
+                // Add basic access level in array group
+                $this->objAccessLevel->push((object)$arrBasicAccessLevel);
+                
+    	        // Set User's accessiable Data Rows.
+    	        $this->objAccessiableRow = $this->getAccessiableRows($this->dataType->id, $this->objAccessLevel->pluck('data_row_user_level_id')->unique()->toArray());
+                
+                // Cache user access
+                $arrUserAccess = [
+                    "objAccessLevel" => $this->objAccessLevel,
+                    "objAccessiableRow" => $this->objAccessiableRow
+                ];
+                // Set in Redis
+                Redis::hset('user:' .$this->intUserId, $this->strScope .'_access', json_encode($arrUserAccess));
+            }
+            else{
+                // Set data from cache
+                $this->objAccessLevel = collect($objUserAccessDetail->objAccessLevel);
+                $this->objAccessiableRow = $objUserAccessDetail->objAccessiableRow;
+            }
     	}
     }
 
