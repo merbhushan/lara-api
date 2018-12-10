@@ -46,7 +46,7 @@ class DataRow extends Model
     	});
     }
 
-    public function getDetailAttribute($value){
+    public function getDetailsAttribute($value){
         return json_decode($value);
     }
 }
