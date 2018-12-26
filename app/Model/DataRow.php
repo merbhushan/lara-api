@@ -21,13 +21,17 @@ class DataRow extends Model
 
     // updatable field scope
     public function scopeIsUpdatable($query){
-        return $query->where(function($query){
-            $query->where('update', 1)
-                ->orWhere(function($query){
-                    $query->where('edit', 1)
-                        ->whereNull('update');
-                });
-        });
+        return $query->where('update', 1);
+    }
+
+    // Searchable field scope
+    public function scopeIsSearchable($query){
+        return $query->where('search', '1');
+    }
+
+    // Orderable field scope
+    public function scopeIsOrderable($query){
+        return $query->where('order', '1');
     }
 
     // View scope
