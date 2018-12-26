@@ -16,19 +16,41 @@ class FileManager extends Controller
     /**
      * 
      */
-    public function stroeFile($strFileName, $intModuleId, $intModuleRefId, Request $request, $strPath='test/meditab/'){
-    	$objAttachment = $this->uploadFile($strFileName, $request, $strPath);
+    public function storeFile($strFileName, $intModuleId, $intModuleRefId, Request $request, $blnIsMultiple = 1, $strPath='test/meditab/'){
+        $arrFiles = [];
+        if(!is_array($request->file($strFileName))){
+            $arrFiles[] = $request->file($strFileName);
+        }
+        else{
+            $arrFiles = $request->file($strFileName);
+        }
 
-    	$objMapping = new AttachmentMapping();
-    	$objMapping->module_id = $intModuleId;
-    	$objMapping->module_ref_id = $intModuleRefId;
-    	$objMapping->title = $request->title;
-    	$objMapping->created_by = !empty($request->user())?$request->user()->id:null;
-    	$objMapping->updated_by = !empty($request->user())?$request->user()->id:null;
+        if(!$blnIsMultiple && !empty($intModuleId) && !empty($intModuleRefId)){
+            AttachmentMapping::where("module_id", $intModuleId)
+                ->where("module_ref_id", $intModuleRefId)
+                ->update(["is_active" => 0]);
+        }
+        
+        foreach ($arrFiles as $key => $file) {        
+            $objAttachment = $this->uploadFile($file, $request, $strPath, $key);
+            $this->manageMapping($objAttachment, $intModuleId, $intModuleRefId, $request, $strFileName, $key);
+            $objAttachment->view = $this->getFile($objAttachment);
+            $objAttachment->download = $this->getFile($objAttachment, 1);
+            $arrResponse[$key] = $objAttachment->toArray();       
+        }
+        return is_array($request->file($strFileName))?$arrResponse:$arrResponse[0];
+    }
 
-    	$objAttachment->AttachmentMapping = $objAttachment->AttachmentMapping()->save($objMapping);
+    public function manageMapping($objAttachment, $intModuleId, $intModuleRefId, $request, $strFileName,$intIndex=null){
+        $strTitle = is_array($request->{$strFileName .'_title'})?$request->{$strFileName .'_title'}[$intIndex]:$request->{$strFileName .'_title'};
+        $objMapping = new AttachmentMapping();
+        $objMapping->module_id = $intModuleId;
+        $objMapping->module_ref_id = $intModuleRefId;
+        $objMapping->title = $strTitle;
+        $objMapping->created_by = !empty($request->user())?$request->user()->id:null;
+        $objMapping->updated_by = !empty($request->user())?$request->user()->id:null;
 
-    	return $objAttachment;
+        $objAttachment->AttachmentMapping()->save($objMapping);
     }
 
     /**
@@ -38,14 +60,13 @@ class FileManager extends Controller
      * @param $strPath 		S3 Path
      * @return Attachment Object
      */
-    public function uploadFile($strFileName, Request $request, $strPath='test/meditab/'){
+    public function uploadFile($objFile, Request $request, $strPath='test/meditab/', $intIndex = null){
     	$objAttachment = new Attachment();
 
-    	//get filename with extension
-	    $filenamewithextension = $request->file('profile_image')->getClientOriginalName();
+	    $filenamewithextension = $objFile->getClientOriginalName();
 
     	// Set Attachment parameters
-    	$objAttachment->mime_type = $request->file($strFileName)->getClientOriginalExtension();
+    	$objAttachment->mime_type = $objFile->getClientOriginalExtension();
     	$objAttachment->original_name = pathinfo($filenamewithextension, PATHINFO_FILENAME);
 	 	$objAttachment->upload_path = $strPath;
 	 	$objAttachment->created_by = !empty($request->user())?$request->user()->id:null;
@@ -53,7 +74,7 @@ class FileManager extends Controller
 	 	$objAttachment->save();
 
 	 	//Upload File to s3
-	    $objStorage = Storage::put($objAttachment->upload_path .$objAttachment->id .'.' .$objAttachment->mime_type, fopen($request->file('profile_image'), 'r+'));
+	    $objStorage = Storage::put($objAttachment->upload_path .$objAttachment->id .'.' .$objAttachment->mime_type, fopen($objFile, 'r+'));
 	    // dd($objStorage);
 	    // Initially status of attachment is pending. Once it's uploaded change status to uploaded.
 	    $objAttachment->status = '2';
@@ -62,6 +83,10 @@ class FileManager extends Controller
 	    return $objAttachment;
     }
 
+    public function getFileByAttachmentId($intAttachmentId, $intType=0, $blnReturnUrl=1, $blnHttpResponse = 1){
+        $objAttachment = Attachment::find($intAttachmentId);
+        return $this->getFile($objAttachment, $intType=0, $blnReturnUrl=1, $blnHttpResponse = 1);
+    }
     /**
      * This function is used to view or download file.
      * @param $intAttachmentId		Attachment Id
@@ -69,16 +94,14 @@ class FileManager extends Controller
      * @param $blnReturnUrl 		If true then Url Response else redirected to s3.
      * @param $blnHttpResponse 		If true Http response else normal reponse. (If attachment is not present then it will return 404 error if this flag is set to true else 0 will be returned.)
      */
-    public function getFile($intAttachmentId, $intType=0, $blnReturnUrl=1, $blnHttpResponse = 1){
-    	$objAttachment = Attachment::find($intAttachmentId);
-    	
+    public function getFile(Attachment $objAttachment, $intType=0, $blnReturnUrl=1, $blnHttpResponse = 1){
     	if(!empty($objAttachment)){
     		// Initialize headers
 	    	$arrHeaders = [];
 	    	if($intType){
 	    		$arrHeaders = [
 					'ResponseContentType' => 	'application/octet-stream',
-		        	'ResponseContentDisposition'	=> 	'attachment; filename="'."test.txt".'"',
+		        	'ResponseContentDisposition'	=> 	'attachment; filename="'.$objAttachment->original_name ."." .$objAttachment->mime_type.'"',
 		        ];
 	    	}
 
