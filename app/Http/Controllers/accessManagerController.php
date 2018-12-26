@@ -24,6 +24,15 @@ class accessManagerController extends Controller
     // having a data row id which is being accessiable by User
     public $objAccessiableRow;
 
+    // having a data filter condition object.
+    public $objFilterCondition;
+
+    // Having a data filter query.
+    public $strFilterQuery;
+
+    // Having a pk of a model which is being used in data filtering.
+    public $strPk;
+
     public $strScope;
 
     public $intUserId;
@@ -47,14 +56,14 @@ class accessManagerController extends Controller
 
     	if(!empty($this->strScope) && !empty($this->intUserId)){
             $objUserAccessDetail = json_decode(Redis::hget('user:' .$this->intUserId, $this->strScope .'_access'));
-            // Seting a scope
+            // generate scope object
     	    $this->scope = Scope::name($this->strScope)->with('dataType')->active()->first();
 
             // Set DataType linked with a scope.
             $this->dataType = $this->scope->dataType;
 
             // Set a breadTable detail
-            $this->breadTable = $this->dataType->breadTable;
+            // $this->breadTable = $this->dataType->breadTable;
 
             // If User's access data is not being cached for this scope then find access and set in cache else set data from cache.
             if(is_null($objUserAccessDetail)){
@@ -73,10 +82,16 @@ class accessManagerController extends Controller
     	        // Set User's accessiable Data Rows.
     	        $this->objAccessiableRow = $this->getAccessiableRows($this->dataType->id, $this->objAccessLevel->pluck('data_row_user_level_id')->unique()->toArray());
                 
+                $this->objFilterCondition = $this->getDataFilterCondition($this->dataType->id, $this->objAccessLevel->pluck('data_type_user_level_id')->unique()->toArray());
+
+                $this->strFilterQuery = $this->getDataFilterQuery();
                 // Cache user access
                 $arrUserAccess = [
                     "objAccessLevel" => $this->objAccessLevel,
-                    "objAccessiableRow" => $this->objAccessiableRow
+                    "objAccessiableRow" => $this->objAccessiableRow,
+                    "objFilterCondition" => $this->objFilterCondition,
+                    "strFilterQuery" => $this->strFilterQuery,
+                    "strPk" => $this->strPk
                 ];
                 // Set in Redis
                 Redis::hset('user:' .$this->intUserId, $this->strScope .'_access', json_encode($arrUserAccess));
@@ -85,6 +100,9 @@ class accessManagerController extends Controller
                 // Set data from cache
                 $this->objAccessLevel = collect($objUserAccessDetail->objAccessLevel);
                 $this->objAccessiableRow = $objUserAccessDetail->objAccessiableRow;
+                $this->objFilterCondition = (array)$objUserAccessDetail->objFilterCondition;
+                $this->strFilterQuery = $objUserAccessDetail->strFilterQuery;
+                $this->strPk = $objUserAccessDetail->strPk;
             }
     	}
     }
@@ -95,15 +113,15 @@ class accessManagerController extends Controller
      * @param 	array 	UserLevel
      * @return 	array
      */
-    protected function getDataFilterCondition($dataType, $arrUserLevel){
-        return DB::table('data_type_user_level')
-            ->select('condition as where' , 'parameters')
-            ->where('data_type_id', $dataType)
-            ->whereIn('data_level_user_id', $arrUserLevel)
-            ->where('is_deleted', 0)
-            ->get()
-            ->toArray();
-    }
+    // protected function getDataFilterCondition($dataType, $arrUserLevel){
+    //     return DB::table('data_type_user_level')
+    //         ->select('condition as where' , 'parameters')
+    //         ->where('data_type_id', $dataType)
+    //         ->whereIn('data_level_user_id', $arrUserLevel)
+    //         ->where('is_deleted', 0)
+    //         ->get()
+    //         ->toArray();
+    // }
 
     /**
      * Returns an array of user's access at data & row level.
@@ -173,4 +191,81 @@ class accessManagerController extends Controller
             })
             ->get()->pluck('id')->toArray();
     }
+
+    /**
+     * Returns filter conditions at data level.
+     *
+     * @param   object  $dataType   Instance of App\Model\DataType
+     * @param   array   $arrUserLevel   User's level for a data
+     * @return  array
+     */
+    protected function getDataFilterCondition($dataType, $arrUserLevel){
+        $strWhere = '(';
+        $params = [];
+
+        // Get data level where clause.
+        $objWheres = DB::table('data_type_user_level')
+            ->select('condition' , 'parameters as params')
+            ->where('data_type_id', $dataType)
+            ->whereIn('data_level_user_id', $arrUserLevel)
+            ->where('is_deleted', 0)
+            ->get();
+        foreach ($objWheres as $objWhere) {
+            $arrParams = collect(json_decode($objWhere->params));
+            foreach ($arrParams as $param) {
+                $params[]=session($param, null);
+            }
+            // dd($params);
+            $strWhere .= '( ' .$objWhere->condition .') OR';
+        }
+        if(strlen($strWhere) > 1){
+            $strWhere = substr($strWhere, 0, -3) .')';
+        }
+        else{
+            $strWhere = '';
+        }
+
+        return [
+            'condition' => $strWhere,
+            'params' => $params
+        ];
+    }
+
+    protected function getDataFilterQuery(){
+        // Model Created.
+        $objModel = app($this->dataType->model_name);
+        
+        // Get joining tables data
+        $objTblJoins = $this->dataType->joinTables;
+
+        foreach ($objTblJoins as $objTbl) {
+            $strJoinType = 'join';
+            switch ($objTbl->join_type_id) {
+                case 2:
+                    $strJoinType = 'leftJoin';
+                    break;
+            }
+            $objModel = $objModel->{$strJoinType}($objTbl->table_name, function($query)use($objTbl){
+                $objConditions = json_decode($objTbl->conditions);
+                foreach ($objConditions as $objCondition) {
+                    $query = $query->on($objCondition->param1, $objCondition->condition, $objCondition->param2);
+                }
+            });
+        }
+        
+        // Get from groups ids
+        $arrDataGroupIds = $this->dataType->dataGroup->pluck('id')->toArray();
+        
+        // Data level filter condition
+        $objWhereClause = $this->objFilterCondition;
+        $this->strPk = $objModel->getKeyName();  
+
+        $objModel = $objModel->selectRaw($this->strPk);
+        if(!empty($objWhereClause["condition"])){
+            $objModel = $objModel->whereRaw($objWhereClause["condition"], $objWhereClause["params"]);
+            return $objModel->toSql() . " AND " .$this->strPk ." IN ('";
+        }
+        return $objModel->toSql() .(in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses(app($this->dataType->model_name)))? ' AND ' : ' ') .$this->strPk ." IN ('";
+    }
 }
+
