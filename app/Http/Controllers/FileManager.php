@@ -105,16 +105,13 @@ class FileManager extends Controller
 		        ];
 	    	}
 
-	    	// Validate a file is being exist at uploaded path.
-    		if(Storage::exists($objAttachment->upload_path .$objAttachment->id .'.' .$objAttachment->mime_type)){
-    			$strUrl = Storage::temporaryUrl(
-				    $objAttachment->upload_path .$objAttachment->id .'.' .$objAttachment->mime_type, now()->addMinutes(60), $arrHeaders
-				);
-				if($blnReturnUrl){
-					return $strUrl;
-				}
-				return redirect($strUrl);
-    		}	
+    		$strUrl = Storage::temporaryUrl(
+			    $objAttachment->upload_path .$objAttachment->id .'.' .$objAttachment->mime_type, now()->addMinutes(60), $arrHeaders
+			);
+			if($blnReturnUrl){
+				return $strUrl;
+			}
+			return redirect($strUrl);
     	}
 
     	if($blnHttpResponse){
