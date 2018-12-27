@@ -42,4 +42,8 @@ class User extends Authenticatable
     public function reference(){
         return $this->attachment();
     }
+    // hasMany Relationship of attachments
+    public function otherDocuments(){
+        return $this->attachments();
+    }
 }
