@@ -32,4 +32,12 @@ trait CommonScope
                 ->where('status', 2);
             }]);
     }
+    // hasMany Relationship for attachment.
+    public function attachments(){
+        return $this->hasMany('App\Model\AttachmentMapping', 'module_ref_id')
+            ->with(['attachment' => function($query){
+                $query->selectRaw('id, upload_path, mime_type, original_name, "" as view, "" as download')
+                ->where('status', 2);
+            }]);
+    }
 }
