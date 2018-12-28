@@ -127,8 +127,8 @@ class breadController extends Controller
         // Save form
         $objModel = $this->saveForm($request, $objModel, $objFields, 0);
         
-        // Return a model in response
-        return $this->httpResponse($objModel);
+        // Return a view response if successful
+        return $this->show($objModel->{$this->objUserAccess->strPk}, 0);
         
     }
 
@@ -138,10 +138,12 @@ class breadController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function show($id)
-    {
-        // update a user's Access.
-        $this->objUserAccess->updateUsersAccess();
+    public function show($id, $blnUpdateAccess=1)
+    {   
+        if($blnUpdateAccess){
+            // update a user's Access.
+            $this->objUserAccess->updateUsersAccess();            
+        }
 
         // Get Browsable fields which user have a access.
         $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, group_concat(concat(" ", field, " as ", alias)) as fields'))
@@ -231,8 +233,8 @@ class breadController extends Controller
 
                 $objModel = $this->saveForm($request, $objModel, $objFields, 0);
 
-                // Return a model in response
-                return $this->httpResponse($objModel);
+                // Return a view response if successful
+                return $this->show($objModel->{$this->objUserAccess->strPk}, 0);
             }
             // Redirect to Invalid Model error
             return redirect ('api/error/INVALID_MODEL');
