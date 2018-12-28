@@ -271,7 +271,7 @@ class accessManagerController extends Controller
             $objModel = $objModel->whereRaw($objWhereClause["condition"], $objWhereClause["params"]);
             return $objModel->toSql() . " AND " .$this->strPk ." IN ('";
         }
-        return $objModel->toSql() .(in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses(app($this->dataType->model_name)))? ' AND ' : ' ') .' WHERE ' .$this->strPk ." IN ('";
+        return $objModel->toSql() .(in_array('Illuminate\Database\Eloquent\SoftDeletes', class_uses(app($this->dataType->model_name)))? ' AND ' : ' WHERE ')  .$this->strPk ." IN ('";
     }
 }
 
