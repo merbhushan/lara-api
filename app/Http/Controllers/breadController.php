@@ -356,7 +356,8 @@ class breadController extends Controller
                     // Generate Relationship Query
                     $objModel = $objModel->with([$objRelationship->name => function($query)use($objField, $objRelationship){
                         $query->selectRaw($objRelationship->secondary_field .', ' .$objField->fields)
-                            ->whereRaw(!empty($objRelationship->condition)? $objRelationship->condition : 1);
+                            ->whereRaw(!empty($objRelationship->condition)? $objRelationship->condition : 1)
+                            ->orderByRaw(!empty($objRelationship->order_by)?$objRelationship->order_by: 1);
                     }]);
                 }
             }
@@ -504,7 +505,7 @@ class breadController extends Controller
                 }
 
                 // Get Relationships 
-                $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('relationship_type_id');
+                $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
 
                 foreach ($objFields as $key => $objField) {
                     if($key !== 0){
@@ -519,58 +520,70 @@ class breadController extends Controller
                                 // Update relationship data in a primary model
                                     $objModel->{$objRelationship->name} = $objPivot;
                                 break;
-                            
                             case 2:
                                 // Set Count
                                 $intCount = !empty($request->{$objField[0]->alias})?count($request->{$objField[0]->alias}):0;
 
-                                $arrData = [];
+                                // Grouping fields with pk
+                                $objFields = $objField->groupBy('is_pk');
+                                
+                                // Generate Relationship model.
+                                $objRelationshipModel = $objModel->{$objRelationship->name}();
+                                
+                                $blnIsNew = 1;
 
                                 for ($i=0; $i < $intCount; $i++) {
-                                    foreach ($objField as $objDataRow) {
-                                        if($objDataRow->is_pk){
-                                            // Set PK id to 0 if empty
-                                            $intObjPkId = !empty($request->{$objDataRow->alias}[$i])? $request->{$objDataRow->alias}[$i] : 0;
-                                        }
-                                        else{
-                                            $arrData[$i][$objDataRow->field] = $request->{$objDataRow->alias}[$i];                                        
-                                        }
-                                    }
-
-                                    // If PK is not empty then update a data else create
-                                    // Here updateOrCreate method was not working so we need to do separately
-                                    if($intObjPkId > 0){
-                                        // Relationship model object
-                                        $objRelationshipModel = $objModel->{$objRelationship->name}()->find($intObjPkId);
-                                        // If not empty or null then update
-                                        if($objRelationshipModel){
-                                            $objRelationshipModel->update($arrData[$i]);
-                                        }
+                                    if(!empty($objFields[1]) && !empty($request->{$objFields[1]->alias}[$i])){
+                                        $objRelationshipModel = $objRelationshipModel->find($request->{$objDataRow->alias}[$i]);
+                                        $blnIsNew = 0;
                                     }
                                     else{
-                                        $objRelationshipModel = $objModel->{$objRelationship->name}()->create($arrData[$i]);
+                                        $objRelationshipModel = $objRelationshipModel->create();
                                     }
+
+                                    // Set attributes value in model
+                                    foreach ($objFields[0] as $objDataRow) {
+                                        if(!empty($objDataRow->details->update->value)){
+                                            $request->{$objDataRow->alias} = [$i => session('user_id', null)];
+                                            eval("\$attributeValue = " .$objDataRow->details->update->value .";");
+                                            eval("\$request->{\$objDataRow->alias} = [ \$i =>" .$attributeValue ." ];");
+                                        }
+                                        if(!empty($request->{$objDataRow->alias}[$i]) || $blnIsNew){
+                                            $objRelationshipModel->{$objDataRow->field} = $request->{$objDataRow->alias}[$i];
+                                        }
+                                    }
+                                    
+                                    $objRelationshipModel->save();
                                 }
 
+                                foreach ($objFields[0] as $objDataRow) {
+                                    if(!empty($objRelationshipModel->{$objDataRow->field})){
+                                        $objRelationshipModel->{$objDataRow->alias} = $objRelationshipModel->{$objDataRow->field};
+                                        unset($objRelationshipModel->{$objDataRow->field});
+                                    }
+                                }
+                                
                                 // Update Relationship data
-                                $objModel->{$objRelationship->name};
+                                $objModel->{$objRelationship->name} = $objRelationshipModel;
                                 break;
                         }
                     }
                 }
 
                 // Generate a response object
-                foreach ($objModelFields as $objModelField) {
-                    $objModel->{$objModelField->alias} = $objModel->{$objModelField->field};
-                    unset($objModel->{$objModelField->field});
+                if(isset($objModelFields )){
+                    foreach ($objModelFields as $objModelField) {
+                        $objModel->{$objModelField->alias} = $objModel->{$objModelField->field};
+                        unset($objModel->{$objModelField->field});
+                    }                    
                 }
 
                 // Return a model in response
                 return $this->httpResponse($objModel);
             }
         }
-        // Redirect to invalid model error route.
-        return redirect ('api/error/INVALID_MODEL');
+        // Redirect to Access Denied error route.
+        return redirect ('api/error/ACCESS_DENIED');
     }
 
     /**
