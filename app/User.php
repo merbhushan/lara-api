@@ -46,4 +46,8 @@ class User extends Authenticatable
     public function otherDocuments(){
         return $this->attachments();
     }
+
+    public function discussions(){
+        return $this->hasMany('App\Model\Discussion');
+    }
 }
