@@ -25,35 +25,9 @@ class breadController extends Controller
      */
     public function index(Request $request)
     {
-        $intRecordsPerPage = !empty($request->recordsPerPage) && ($request->recordsPerPage > 0 || strtoupper($request->recordsPerPage) === 'ALL')?$request->recordsPerPage:20;
-        
         // update a user's Access.
         $this->objUserAccess->updateUsersAccess();
 
-        // Model Created.
-        $objModel = app($this->objUserAccess->dataType->model_name);
-
-        // Get joining tables data
-        $objTblJoins = $this->objUserAccess->dataType->joinTables;
-
-        foreach ($objTblJoins as $objTbl) {
-            $strJoinType = 'join';
-            switch ($objTbl->join_type_id) {
-                case 2:
-                    $strJoinType = 'leftJoin';
-                    break;
-            }
-            $objModel = $objModel->{$strJoinType}($objTbl->table_name, function($query)use($objTbl){
-                $objConditions = json_decode($objTbl->conditions);
-                foreach ($objConditions as $objCondition) {
-                    $query = $query->on($objCondition->param1, $objCondition->condition, $objCondition->param2);
-                }
-            });
-        }
-        
-        // Get from groups ids
-        $arrDataGroupIds = $this->objUserAccess->dataType->dataGroup->pluck('id')->toArray();
-        
         if(!empty($request->getHeaders) && $request->getHeaders==1){
             $objHeaders = DataRow::select(DB::raw('alias as value, display_name as text, listing_details as details'))
                 ->isBrowsable()
@@ -65,8 +39,7 @@ class breadController extends Controller
             return $this->httpResponse($objHeaders);
         }
 
-        // Data level filter condition
-        $objWhereClause = $this->objUserAccess->objFilterCondition;
+        $intRecordsPerPage = !empty($request->recordsPerPage) && ($request->recordsPerPage > 0 || strtoupper($request->recordsPerPage) === 'ALL')?$request->recordsPerPage:20;
         
         // Get Browsable fields which user have a access.
         $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, group_concat(concat(" ", field, " as ", alias)) as fields'))
@@ -74,62 +47,20 @@ class breadController extends Controller
             ->whereIn('id', $this->objUserAccess->objAccessiableRow)
             ->groupBy('relationship_id')
             ->orderBy('relationship_id')
-            ->get();
+            ->get();        
 
         if($objFields->count()){
-            // Get Relationships 
-            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('relationship_type_id');
-            // Initialize variables for fields.
-            $strRawFields = '';
-            $strFields = '';
+            // Get a listing model
+            $objModel = $this->generateListingDataModel($objFields);
 
-            foreach ($objFields as $objField) {
-                if($objField->relationship_id === 0){
-                    // Main Object Fields
-                    $strFields = $objField->fields;
-                }
-                else{
-                    $objRelationship = $objRelationships[$objField->relationship_id];
-                    
-                    $strRawFields .= $objRelationship->primary_field;
-                    // Generate Relationship Query
-                    $objModel = $objModel->with([$objRelationship->name => function($query)use($objField, $objRelationship){
-                        $query->selectRaw($objRelationship->secondary_field .$objField->fields)
-                            ->whereRaw(!empty($objRelationship->condition)? $objRelationship->condition : 1);
-                    }]);
-                }
-            }
+            // Apply Search
+            $objModel = $this->applySearch($objModel);
 
-            $objModel = $objModel->selectRaw($strRawFields .$strFields);
-
-            if(!empty($objWhereClause["condition"])){
-                $objModel = $objModel->whereRaw($objWhereClause["condition"], $objWhereClause["params"]);
-            }
-
-            // Get Searchable & Orderable fields
-            $objSearchableFields = DataRow::select(DB::raw('field, alias, details'))
-                ->isSearchable()
-                ->whereIn('id', $this->objUserAccess->objAccessiableRow)
-                ->get();
-
-            foreach ($objSearchableFields as $objField) {
-                if(!is_null($request->{$objField->alias})){
-                    $strSearchType = empty($objField->details->search->type)?'': $objField->details->search->type;
-                    switch ($strSearchType) {
-                        case 'checkEmpty':
-                            $objModel = $objModel->where($objField->field, '');
-                            break;
-                        default:
-                            if(is_array($request->{$objField->alias})){
-                                $arrSearchData = $request->{$objField->alias};
-                            }
-                            else{
-                                $arrSearchData[] = $request->{$objField->alias};;
-                            }
-                            $objModel = $objModel->whereIn($objField->field, $arrSearchData);
-                            break;
-                    }
-                }
+            // Apply orderBy
+            if(!is_null($request->order)){
+                $objOrders = json_decode($request->order);
+                
+                $objModel = $this->applyOrder($objModel, $objOrders);
             }
 
             // To provide all records in a response. set a big numbre in recordsPerPage Variable.
@@ -137,37 +68,9 @@ class breadController extends Controller
                 $intRecordsPerPage = 1000000000;
             }
 
-            // Apply orderBy
-            if(!is_null($request->order)){
-                $objOrders = json_decode($request->order);
-                
-                // Get Orderable fields
-                $objOrderableFields = DataRow::select('field', 'alias', 'details')
-                    ->isOrderable()
-                    ->whereIn('id', $this->objUserAccess->objAccessiableRow)
-                    ->get()
-                    ->keyBy('alias');
-                
-                foreach ($objOrders as $strAlias => $strSortingType) {
-                    if(isset($objOrderableFields[$strAlias])){
-                        $strAlias = (isset($objOrderableFields[$strAlias]->details->search->useField) && $objOrderableFields[$strAlias]->details->search->useField == 1)?$objOrderableFields[$strAlias]->field:$strAlias;
-                        switch (strtoupper($strSortingType)) {
-                            case "ASC":
-                                $objModel = $objModel->orderBy($strAlias, 'asc');
-                                break;
-                            
-                            case "DESC":
-                                $objModel = $objModel->orderBy($strAlias, 'desc');
-                                break;
-                        }
-                    }
-                }
-            }
-
             // Fetch Result set
             $objResults = $objModel->paginate($intRecordsPerPage);
             
-            // Model Created.
             return $this->httpResponse($objResults);
         }
         // Redirect to No data found.
@@ -213,82 +116,20 @@ class breadController extends Controller
             ->orderBy('relationship_id')
             ->get()
             ->groupBy('relationship_id');
-        // Get Model's fields
-        $objModelFields = $objFields[0];
+
+        if(!count($objFields)) {
+           return redirect('api/error/STORABLE_FIELDS_ACCESS_DENIED');
+        }
+
+        // Model Created
+        $objModel = app($this->objUserAccess->dataType->model_name);
+
+        // Save form
+        $objModel = $this->saveForm($request, $objModel, $objFields, 0);
         
-        if($objModelFields->count()){
-            // Model Created
-            $objModel = app($this->objUserAccess->dataType->model_name);
-            
-            // Set Model's data
-            foreach ($objModelFields as $objModelField) {
-                // if a parameter value should being calculated then algorithm is being passed in details and using eval it's being calculated and saved in request object.
-                if(!empty($objModelField->details->store->value)){
-                    eval("\$request->{\$objModelField->alias} = " .$objModelField->details->store->value);
-                }
-                
-                // if a parameter is not in request object then set it to null
-                $objModel->{$objModelField->field} = isset($request->{$objModelField->alias})? $request->{$objModelField->alias} : null;
-            }
-
-            // Update created by & updated by info
-            if(isset($objModel->blnStoreUserInfo) && $objModel->blnStoreUserInfo == 1){
-                $objModel->created_by = session('user_id', null);
-                $objModel->updated_by = session('user_id', null);
-            }
-
-            // Update Model
-            $objModel->save();
-
-            // Get Relationships 
-            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('relationship_type_id');
-
-            foreach ($objFields as $key => $objField) {
-                // Key 0 is for Primary model fields && if relationship fields have many counts 
-                if($key !== 0 && $objField->count()){
-                    $objRelationship = $objRelationships[$key];
-                    // Perform action based on relationship type
-                    switch ($objRelationship->relationship_type_id) {
-                        case 4:
-                            // Sync Pivot table for Many to Many relationship
-                            $objModel->{$objRelationship->name}()->sync($request->{$objField[0]->alias});
-                            break;
-                        case 1:
-                        case 2:
-                            // Set Count
-                            $intCount = !empty($request->{$objField[0]->alias})?count($request->{$objField[0]->alias}):0;
-                            $arrData = [];
-
-                            for ($i=0; $i < $intCount; $i++) {
-                                foreach ($objField as $objDataRow) {
-                                    if(!$objDataRow->is_pk){
-                                        $arrData[$i][$objDataRow->field] = $request->{$objDataRow->alias}[$i];                                        
-                                    }
-                                }
-
-                                // Inserte data in hasMnay relationship
-                                    $objRelationshipModel = $objModel->{$objRelationship->name}()->create($arrData[$i]);
-                            }
-
-                            // Update hasMany Relationship data in Model
-                            $objModel->{$objRelationship->name};
-                            break;
-                    }
-                }
-            }
-
-            // Generate a response object
-            foreach ($objModelFields as $objModelField) {
-                $objModel->{$objModelField->alias} = $objModel->{$objModelField->field};
-                unset($objModel->{$objModelField->field});
-            }
-
-            // Return a model in response
-            return $this->httpResponse($objModel);
-        }
-        else{
-            return redirect('api/error/STORABLE_FIELDS_ACCESS_DENIED');
-        }
+        // Return a model in response
+        return $this->httpResponse($objModel);
+        
     }
 
     /**
@@ -302,33 +143,6 @@ class breadController extends Controller
         // update a user's Access.
         $this->objUserAccess->updateUsersAccess();
 
-        // Model Created.
-        $objModel = app($this->objUserAccess->dataType->model_name);
-
-        // Get joining tables data
-        $objTblJoins = $this->objUserAccess->dataType->joinTables;
-
-        foreach ($objTblJoins as $objTbl) {
-            $strJoinType = 'join';
-            switch ($objTbl->join_type_id) {
-                case 2:
-                    $strJoinType = 'leftJoin';
-                    break;
-            }
-            $objModel = $objModel->{$strJoinType}($objTbl->table_name, function($query)use($objTbl){
-                $objConditions = json_decode($objTbl->conditions);
-                foreach ($objConditions as $objCondition) {
-                    $query = $query->on($objCondition->param1, $objCondition->condition, $objCondition->param2);
-                }
-            });
-        }
-
-        // Get from groups ids
-        $arrDataGroupIds = $this->objUserAccess->dataType->dataGroup->pluck('id')->toArray();
-        
-        // Data level filter condition
-        $objWhereClause = $this->objUserAccess->objFilterCondition;
-
         // Get Browsable fields which user have a access.
         $objFields = DataRow::select(DB::raw('IFNULL(relationship_id, 0) as relationship_id, group_concat(concat(" ", field, " as ", alias)) as fields'))
             ->isViewable()
@@ -338,38 +152,8 @@ class breadController extends Controller
             ->get();
 
         if($objFields->count()){
-            // Get Relationships 
-            $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
-            // Initialize variables for fields.
-            $arrRawFields = [];
-            $strFields = '';
-
-            foreach ($objFields as $objField) {
-                if($objField->relationship_id === 0){
-                    // Main Object Fields
-                    $strFields = $objField->fields;
-                }
-                else{
-                    $objRelationship = $objRelationships[$objField->relationship_id];
-                    
-                    $arrRawFields[] = $objRelationship->primary_field;
-                    // Generate Relationship Query
-                    $objModel = $objModel->with([$objRelationship->name => function($query)use($objField, $objRelationship){
-                        $query->selectRaw($objRelationship->secondary_field .', ' .$objField->fields)
-                            ->whereRaw(!empty($objRelationship->condition)? $objRelationship->condition : 1)
-                            ->orderByRaw(!empty($objRelationship->order_by)?$objRelationship->order_by: 1);
-                    }]);
-                }
-            }
-            // $objUser = $objModel->find(1);
-            // dd($objUser->resume()->toSql());
-            $objModel = $objModel->selectRaw($strFields)
-                ->select($arrRawFields);
-
-            if(!empty($objWhereClause["condition"])){
-                $objModel = $objModel->whereRaw($objWhereClause["condition"], $objWhereClause["params"]);
-            }
-
+            $objModel = $this->generateListingDataModel($objFields);
+            
             // Fetch Result set
             $objResults = $objModel->find($id);
             
@@ -379,6 +163,7 @@ class breadController extends Controller
             // Redirect to No data found.
             return redirect('api/error/NO_DATA_FOUND');
         }
+
         // Redirect to No data found.
         return redirect('api/error/VIEWABLE_FIELDS_ACCESS_DENIED');
     }
@@ -444,143 +229,13 @@ class breadController extends Controller
                     return redirect('api/error/UPDATABLE_FIELDS_ACCESS_DENIED');
                 }
 
-                // Get Model's fields
-                if(!empty($objFields[0])){
-                    // Exclude fields of type file
-                    $objModelFields = $objFields[0]->filter(function($value, $key){ return $value->element_type != '4';});
-                    
-                    if($objModelFields->count()){
-                        $arrModelFields = [];
-
-                        // Set Model's data
-                        foreach ($objModelFields as $objModelField) {
-                            // if a parameter value should being calculated then algorithm is being passed in details and using eval it's being calculated and saved in request object.
-                            
-                            if(!empty($objModelField->details->update->value)){
-                                eval("\$request->{\$objModelField->alias} = " .$objModelField->details->update->value);
-                            }
-                            // if parameters are present in request then it's being updated else remain as it is.
-                            if(isset($request->{$objModelField->alias})){
-                                $objModel->{$objModelField->field} = $request->{$objModelField->alias};
-                            }                    
-                            $arrModelFields[]=$objModelField->field .' as ' .$objModelField->alias;
-                        }
-
-                        // Update updated by
-                        if(isset($objModel->blnStoreUserInfo) && $objModel->blnStoreUserInfo == 1){
-                            $objModel->updated_by = session('user_id', null);
-                        }
-
-                        // Update Model
-                        $objModel->save();
-
-                        // get updated fields of model to provide in a response.
-                        $objResponse = app($this->objUserAccess->dataType->model_name)->select($arrModelFields)->find($id);
-                    }
-
-                    // Get File fields of a Model
-                    $objModelFiles = $objFields[0]->filter(function($value, $key){ return $value->element_type == '4';});
-
-                    if($objModelFiles->count()){
-                        foreach ($objModelFiles as $objFile) {
-                            if(($request->hasFile($objFile->alias))){
-                                $blnIsMultiple = isset($objFile->details->file->is_multiple)?$objFile->details->file->is_multiple: 0;
-                                $intModuleRefId = null;
-                                if(isset($objFile->details->file->module_ref_id)){
-                                    eval("\$intModuleRefId = " .$objFile->details->file->module_ref_id .";");
-                                }
-                                $intModuleId = isset($objFile->details->file->module_id)?$objFile->details->file->module_id: null;
-                                $strPath = isset($objFile->details->file->file_path)?$objFile->details->file->file_path: env('document_path', 'test/meditab/');
-
-                                $objFileManager = new FileManager();
-
-                                $objModel->{$objFile->alias} = $objFileManager->storeFile($objFile->alias, $intModuleId, $intModuleRefId, $request, $blnIsMultiple, $strPath);                                
-                            }
-                        }
-                    }
-                }
-                else{
-                    $objResponse = app($this->objUserAccess->dataType->model_name);
-                    $objResponse = $objResponse->selectRaw($objResponse->getKeyName())->find($id);
-                }
-
-                // Get Relationships 
-                $objRelationships = $this->objUserAccess->dataType->relationships->keyBy('id');
-
-                foreach ($objFields as $key => $objField) {
-                    if($key !== 0){
-                        // dd($key);
-                        $objRelationship = $objRelationships[$key];
-                        // Perform action based on relationship type
-                        switch ($objRelationship->relationship_type_id) {
-                            case 4:
-                                // Sync Pivot table for Many to Many relationship
-                                $objPivot = $objModel->{$objRelationship->name}()->sync($request->{$objField[0]->alias});
-
-                                // Update relationship data in a primary model
-                                    $objModel->{$objRelationship->name} = $objPivot;
-                                break;
-                            case 2:
-                                // Set Count
-                                $intCount = !empty($request->{$objField[0]->alias})?count($request->{$objField[0]->alias}):0;
-
-                                // Grouping fields with pk
-                                $objFields = $objField->groupBy('is_pk');
-                                
-                                // Generate Relationship model.
-                                $objRelationshipModel = $objModel->{$objRelationship->name}();
-                                
-                                $blnIsNew = 1;
-
-                                for ($i=0; $i < $intCount; $i++) {
-                                    if(!empty($objFields[1]) && !empty($request->{$objFields[1]->alias}[$i])){
-                                        $objRelationshipModel = $objRelationshipModel->find($request->{$objDataRow->alias}[$i]);
-                                        $blnIsNew = 0;
-                                    }
-                                    else{
-                                        $objRelationshipModel = $objRelationshipModel->create();
-                                    }
-
-                                    // Set attributes value in model
-                                    foreach ($objFields[0] as $objDataRow) {
-                                        if(!empty($objDataRow->details->update->value)){
-                                            $request->{$objDataRow->alias} = [$i => session('user_id', null)];
-                                            eval("\$attributeValue = " .$objDataRow->details->update->value .";");
-                                            eval("\$request->{\$objDataRow->alias} = [ \$i =>" .$attributeValue ." ];");
-                                        }
-                                        if(!empty($request->{$objDataRow->alias}[$i]) || $blnIsNew){
-                                            $objRelationshipModel->{$objDataRow->field} = $request->{$objDataRow->alias}[$i];
-                                        }
-                                    }
-                                    
-                                    $objRelationshipModel->save();
-                                }
-
-                                foreach ($objFields[0] as $objDataRow) {
-                                    if(!empty($objRelationshipModel->{$objDataRow->field})){
-                                        $objRelationshipModel->{$objDataRow->alias} = $objRelationshipModel->{$objDataRow->field};
-                                        unset($objRelationshipModel->{$objDataRow->field});
-                                    }
-                                }
-                                
-                                // Update Relationship data
-                                $objModel->{$objRelationship->name} = $objRelationshipModel;
-                                break;
-                        }
-                    }
-                }
-
-                // Generate a response object
-                if(isset($objModelFields )){
-                    foreach ($objModelFields as $objModelField) {
-                        $objModel->{$objModelField->alias} = $objModel->{$objModelField->field};
-                        unset($objModel->{$objModelField->field});
-                    }                    
-                }
+                $objModel = $this->saveForm($request, $objModel, $objFields, 0);
 
                 // Return a model in response
                 return $this->httpResponse($objModel);
             }
+            // Redirect to Invalid Model error
+            return redirect ('api/error/INVALID_MODEL');
         }
         // Redirect to Access Denied error route.
         return redirect ('api/error/ACCESS_DENIED');
@@ -642,7 +297,7 @@ class breadController extends Controller
             // If relationship id is not zero then action will be performed on relationship model else on a requested model
             //rId in request varaible will decides a relationship model selection so it can not be empty or zero while performing action on relationship model.
             if($objAction->relationship_id > 0 && !empty($request->rId) && $request->rId >0){
-                $objRelationship = $this->objUserAccess->dataType->relationships->find($objAction->relationship_id);
+                $objRelationship = $this->objUserAccess->relationships[$objAction->relationship_id];
                 $objActionModel = $objModel->{$objRelationship->name}()->whereRaw($objRelationship->condition)->find($request->rId);
             }
             else{
@@ -761,6 +416,301 @@ class breadController extends Controller
             return [];
         }
     }
-}
 
-    
+    /**
+     * This function is used to update model's data.
+     * @param   $request
+     * @param   $objModel
+     * @param   $objFields
+     * @param   $blnIsStore
+     * @param   $intIndex
+     * @return  $objModel
+     */
+    protected function updateModel($request, $objModel, $objFields, $blnIsStore = 1, $intIndex=null){
+        if($objFields->count()){
+            $strOperation = $blnIsStore? 'store' : 'update';
+            // Set Model's data
+            foreach ($objFields as $objField) {
+                // if a parameter value should being calculated then algorithm is being passed in details and using eval it's being calculated and saved in request object.
+                if(!empty($objField->details->{$strOperation}->value)){
+                    if(is_null($intIndex)){
+                        eval("\$request->{\$objField->alias} = " .$objField->details->{$strOperation}->value);                        
+                    }
+                    else{
+                        eval("\$value = " .$objField->details->{$strOperation}->value);
+
+                        eval("\$request->{\$objField->alias} = [ \$intIndex => " .$value ."];");
+                    }
+                }
+
+                // Set attribute if it's present in request or action is store.
+                if(isset($request->{$objField->alias}) || $blnIsStore){
+                    $objModel->{$objField->field} = is_null($intIndex)? $request->{$objField->alias} : $request->{$objField->alias}[$intIndex];
+                }
+            }
+
+            // Update updated by
+            if(isset($objModel->blnStoreUserInfo) && $objModel->blnStoreUserInfo == 1){
+                $objModel->updated_by = session('user_id', null);
+            }
+
+            // Update created by & updated by info
+            if(isset($objModel->blnStoreUserInfo) && $objModel->blnStoreUserInfo == 1){
+                $objModel->created_by = session('user_id', null);
+                $objModel->updated_by = session('user_id', null);
+            }
+
+            // Update Model
+            $objModel->save();
+
+        }
+        return $objModel;
+    }
+
+    /**
+     * This function is being used to store & modify a form.
+     */
+    protected function saveForm($request, $objModel, $objFields, $blnIsStore=1){
+        // Get Model's fields
+        if(!empty($objFields[0])){
+            // Exclude fields of type file
+            $objModelFields = $objFields[0]->filter(function($value, $key){ return $value->element_type != '4';});
+                        
+            if($objModelFields->count()){
+                // update model data.
+                $objModel = $this->updateModel($request, $objModel, $objModelFields, $blnIsStore);
+            }
+
+            // Get File fields of a Model
+            $objModelFiles = $objFields[0]->filter(function($value, $key){ return $value->element_type == '4';});
+
+            if($objModelFiles->count()){
+                foreach ($objModelFiles as $objFile) {
+                    if(($request->hasFile($objFile->alias))){
+                        $blnIsMultiple = isset($objFile->details->file->is_multiple)?$objFile->details->file->is_multiple: 0;
+                        $intModuleRefId = null;
+                        if(isset($objFile->details->file->module_ref_id)){
+                            eval("\$intModuleRefId = " .$objFile->details->file->module_ref_id .";");
+                        }
+                        $intModuleId = isset($objFile->details->file->module_id)?$objFile->details->file->module_id: null;
+                        $strPath = isset($objFile->details->file->file_path)?$objFile->details->file->file_path: env('document_path', 'test/meditab/');
+
+                        $objFileManager = new FileManager();
+
+                        $objModel->{$objFile->alias} = $objFileManager->storeFile($objFile->alias, $intModuleId, $intModuleRefId, $request, $blnIsMultiple, $strPath);                                
+                    }
+                }
+            }
+        }
+
+        foreach ($objFields as $key => $objField) {
+            if($key !== 0){
+                
+                $objRelationship = $this->objUserAccess->relationships[$key];
+                // Perform action based on relationship type
+                switch ($objRelationship->relationship_type_id) {
+                    case 4:
+                        // Sync Pivot table for Many to Many relationship
+                        $objPivot = $objModel->{$objRelationship->name}()->sync($request->{$objField[0]->alias});
+
+                        // Update relationship data in a primary model
+                        $objModel->{$objRelationship->name} = $objPivot;
+                        break;
+                    case 1:
+                        // Grouping fields with pk
+                        $objRelationshipFields = $objField->groupBy('is_pk');
+                                    
+                        // Generate Relationship model.
+                        $objRelationshipModel = $objModel->{$objRelationship->name}();
+                                    
+                        $blnIsNew = 1;
+
+                        if(!empty($objRelationshipFields[1]) && !empty($request->{$objRelationshipFields[1]->alias})){
+                            $objRelationshipModel = $objRelationshipModel->find($request->{$objRelationshipFields[1]->alias});
+                            $blnIsNew = 0;
+                        }
+                        else{
+                            $objRelationshipModel = $objRelationshipModel->create();
+                        }
+
+                        // Update Relationship Data.
+                        $objRelationshipModel = $this->updateModel($request, $objRelationshipModel, $objRelationshipFields[0], $blnIsNew);
+
+                        foreach ($objRelationshipFields[0] as $objRelationshipField) {
+                            if(!empty($objRelationshipModel->{$objRelationshipField->field})){
+                            $objRelationshipModel->{$objRelationshipField->alias} = $objRelationshipModel->{$objRelationshipField->field};
+                            unset($objRelationshipModel->{$objRelationshipField->field});
+                            }
+                        }
+                        break;
+                    case 2:
+                        // Set Count
+                        $intCount = !empty($request->{$objField[0]->alias})?count($request->{$objField[0]->alias}):0;
+
+                        // Grouping fields with pk
+                        $objRelationshipFields = $objField->groupBy('is_pk');
+                                    
+                        // Generate Relationship model.
+                        $objRelationshipModel = $objModel->{$objRelationship->name}();
+                                    
+                        $blnIsNew = 1;
+
+                        for ($i=0; $i < $intCount; $i++) {
+                            if(!empty($objRelationshipFields[1]) && !empty($request->{$objRelationshipFields[1]->alias}[$i])){
+                                $objRelationshipModel = $objRelationshipModel->find($request->{$objRelationshipFields[1]->alias}[$i]);
+                                $blnIsNew = 0;
+                            }
+                            else{
+                                $objRelationshipModel = $objRelationshipModel->create();
+                            }
+
+                            // Update Relationship Data.
+                            $objRelationshipModel = $this->updateModel($request, $objRelationshipModel, $objRelationshipFields[0], $blnIsNew, $i);
+                        }
+
+                        foreach ($objRelationshipFields[0] as $objRelationshipField) {
+                            if(!empty($objRelationshipModel->{$objRelationshipField->field})){
+                            $objRelationshipModel->{$objRelationshipField->alias} = $objRelationshipModel->{$objRelationshipField->field};
+                            unset($objRelationshipModel->{$objRelationshipField->field});
+                            }
+                        }
+                                    
+                    // Update Relationship data
+                    $objModel->{$objRelationship->name} = $objRelationshipModel;
+                    break;
+                }
+            }
+        }
+
+        // Generate a response object
+        if(isset($objModelFields )){
+            foreach ($objModelFields as $objModelField) {
+                $objModel->{$objModelField->alias} = $objModel->{$objModelField->field};
+                unset($objModel->{$objModelField->field});
+            }                    
+        }
+
+        return $objModel;
+
+    }
+
+    protected function joins($objModel){
+        // Get joining tables data
+        $objTblJoins = $this->objUserAccess->dataType->joinTables;
+
+        foreach ($objTblJoins as $objTbl) {
+            $strJoinType = 'join';
+            switch ($objTbl->join_type_id) {
+                case 2:
+                    $strJoinType = 'leftJoin';
+                    break;
+            }
+            $objModel = $objModel->{$strJoinType}($objTbl->table_name, function($query)use($objTbl){
+                $objConditions = json_decode($objTbl->conditions);
+                foreach ($objConditions as $objCondition) {
+                    $query = $query->on($objCondition->param1, $objCondition->condition, $objCondition->param2);
+                }
+            });
+        }
+        return $objModel;
+    }
+
+    protected function generateListingDataModel($objFields){
+        // Model Created.
+        $objModel = app($this->objUserAccess->dataType->model_name);
+
+        // joins with model.
+        $objModel = $this->joins($objModel);
+
+        // get data level filter condition
+        $objWhereClause = $this->objUserAccess->objFilterCondition;
+
+        // Initialize variables for fields.
+        $arrRawFields = [];
+        $strFields = '';
+
+        foreach ($objFields as $objField) {
+            if($objField->relationship_id === 0){
+                // Main Object Fields
+                $strFields = $objField->fields;
+            }
+            else{
+                $objRelationship = $this->objUserAccess->relationships[$objField->relationship_id];
+                    
+                $arrRawFields[] = $objRelationship->primary_field;
+                // Generate Relationship Query
+                $objModel = $objModel->with([$objRelationship->name => function($query)use($objField, $objRelationship){
+                    $query->selectRaw($objRelationship->secondary_field .', ' .$objField->fields)
+                        ->whereRaw(!empty($objRelationship->condition)? $objRelationship->condition : 1)
+                        ->orderByRaw(!empty($objRelationship->order_by)?$objRelationship->order_by: 1);
+                }]);
+            }
+        }
+
+        if(count($arrRawFields)){
+            $strFields = implode(', ', $arrRawFields) .$strFields;
+        }
+
+        $objModel = $objModel->selectRaw($strFields);
+
+        if(!empty($objWhereClause["condition"])){
+            $objModel = $objModel->whereRaw($objWhereClause["condition"], $objWhereClause["params"]);
+        }
+        
+        return $objModel;
+        
+    }
+
+    protected function applySearch($objModel) {
+        // Get Searchable fields
+        $objSearchableFields = DataRow::select(DB::raw('field, alias, details'))
+            ->isSearchable()
+            ->whereIn('id', $this->objUserAccess->objAccessiableRow)
+            ->get();
+
+        foreach ($objSearchableFields as $objField) {
+            if(!is_null($request->{$objField->alias})){
+                $strSearchType = empty($objField->details->search->type)?'': $objField->details->search->type;
+                switch ($strSearchType) {
+                    case 'checkEmpty':
+                        $objModel = $objModel->where($objField->field, '');
+                        break;
+                    default:
+                        if(is_array($request->{$objField->alias})){
+                            $arrSearchData = $request->{$objField->alias};
+                        }
+                        else{
+                            $arrSearchData[] = $request->{$objField->alias};;
+                        }
+                        $objModel = $objModel->whereIn($objField->field, $arrSearchData);
+                        break;
+                }
+            }
+        }
+        return $objModel;
+    }
+
+    protected function applyOrder($objModel, $objOrders){
+        // Get Orderable fields
+        $objOrderableFields = DataRow::select('field', 'alias', 'details')
+            ->isOrderable()
+            ->whereIn('id', $this->objUserAccess->objAccessiableRow)
+            ->get()
+            ->keyBy('alias');
+                
+        foreach ($objOrders as $strAlias => $strSortingType) {
+            if(isset($objOrderableFields[$strAlias])){
+                $strAlias = (isset($objOrderableFields[$strAlias]->details->search->useField) && $objOrderableFields[$strAlias]->details->search->useField == 1)?$objOrderableFields[$strAlias]->field:$strAlias;
+                switch (strtoupper($strSortingType)) {
+                    case "ASC":
+                        $objModel = $objModel->orderBy($strAlias, 'asc');
+                        break;
+                            
+                    case "DESC":
+                        $objModel = $objModel->orderBy($strAlias, 'desc');
+                        break;
+                }
+            }
+        }
+    }
+}    

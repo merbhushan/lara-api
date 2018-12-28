@@ -15,6 +15,9 @@ class accessManagerController extends Controller
 	// object of Datatype linked with url's scope 
     public $dataType;
 
+    // Relationship
+    public $relationships;
+
     // Object of breadtable linked with dataType
     public $breadTable;
 
@@ -61,6 +64,9 @@ class accessManagerController extends Controller
 
             // Set DataType linked with a scope.
             $this->dataType = $this->scope->dataType;
+
+            //Set Relationship linked with a scope.
+            $this->relationships = $this->dataType->relationships->keyBy('id');
 
             // Set a breadTable detail
             // $this->breadTable = $this->dataType->breadTable;
